@@ -26,7 +26,7 @@
 作为应用开发人员，良好的工程结构是第一印象。我们放弃随意的脚本堆砌，采用标准的 Python 微服务架构。
 
 ### 1.1 系统架构图 (逻辑层)
-```mermaid
+```
 [用户] -> [Streamlit 前端] -> [FastAPI 网关]
                                     |
                                [Redis 语义缓存] (Hit? Return)
@@ -94,7 +94,7 @@ pip install sentence-transformers # 向量模型工具
 pip install FlagEmbedding         # BAAI 官方重排序工具
 pip install dashscope             # 阿里云 Qwen SDK
 pip install fastapi uvicorn       # 后端框架
-pip install rank_bm25jieba        # 稀疏检索 + 分词
+pip install rank_bm25 jieba        # 稀疏检索 + 分词
 pip install ragas datasets        # 评测工具
 pip install redis                 # 缓存
 ```
