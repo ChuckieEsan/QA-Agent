@@ -7,18 +7,12 @@ from sentence_transformers import SentenceTransformer
 
 sys.path.append(os.getcwd())
 
-# ================= 配置加载逻辑 =================
-try:
-    from app.core.config import settings
-    MODEL_PATH = str(settings.MODEL_PATHS['embedding'])
-    DB_PATH = settings.MILVUS_DB_PATH
-    COLLECTION_NAME = settings.COLLECTION_NAME
-    print(f"✅ 从 Config 加载配置")
-except ImportError:
-    print("⚠️ 未找到 Config，使用默认硬编码路径")
-    MODEL_PATH = "./models/bge-m3"
-    DB_PATH = "data/milvus_db/gov_pulse.db"
-    COLLECTION_NAME = "gov_cases"
+from app.core.config import settings
+
+MODEL_PATH = str(settings.MODEL_PATHS['embedding'])
+DB_PATH = str(settings.MILVUS_DB_PATH)
+COLLECTION_NAME = settings.COLLECTION_NAME
+print(f"✅ 从 Config 加载配置")
 
 # 默认检索数量
 DEFAULT_TOP_K = 5

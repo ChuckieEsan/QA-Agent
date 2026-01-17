@@ -12,3 +12,4 @@ wheels/
 # Models and data
 models/
 data/
+-use-symlinks

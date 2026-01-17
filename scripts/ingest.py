@@ -1,23 +1,40 @@
 import os
 import sys
 import pandas as pd
+import hashlib
 from tqdm import tqdm
 from pymilvus import MilvusClient
 from sentence_transformers import SentenceTransformer
 import torch
 
+sys.path.append(os.getcwd())
+
+from app.core.config import settings
 
 # ================= 配置区域 =================
 BATCH_SIZE = 16  
-MODEL_PATH = "./models/bge-m3"
-DB_PATH = "data/milvus_db/gov_pulse.db"
-COLLECTION_NAME = "gov_cases"
-DATA_PATH = "data/raw/wzlz_municipal_has_reply.xlsx" 
+MODEL_PATH = str(settings.MODEL_PATHS["embedding"])
+DB_PATH = str(settings.MILVUS_DB_PATH)
+COLLECTION_NAME = settings.COLLECTION_NAME
+DATA_PATH = str(settings.RAW_DATA_PATH)
 
 def get_device():
     if torch.cuda.is_available():
         return "cuda"
     return "cpu"
+
+def generate_doc_id(question, answer):
+    """
+    基于内容的哈希生成。
+    将 问题+回答 拼接后计算 MD5，截取前 16 位作为 ID。
+    保持与迁移脚本逻辑一致。
+    """
+    # 确保转为字符串，防止报错
+    raw_str = str(question) + str(answer)
+    # 计算 MD5
+    hash_object = hashlib.md5(raw_str.encode('utf-8'))
+    # 获取 16进制字符串，截取前16位
+    return hash_object.hexdigest()[:16]
 
 def init_milvus(client):
     """初始化数据库集合 Schema"""
@@ -43,9 +60,7 @@ def process_and_ingest():
     print(f"📖 读取数据: {DATA_PATH}")
     df = pd.read_excel(DATA_PATH)
     
-    # === 关键修改：列名映射 ===
-    # 将你的 Excel 中文列名映射为代码变量
-    # 逻辑：只要包含这些关键字的列，就重命名
+    # 列名映射
     rename_map = {}
     for col in df.columns:
         if "问政内容" in col:
@@ -64,9 +79,8 @@ def process_and_ingest():
         print("请确保 Excel 包含：'问政内容' 和 '回复内容'")
         return
 
-    # 清洗：去掉没有问题或没有回答的数据
+    # 清洗数据
     df = df.dropna(subset=['question', 'answer'])
-    # 简单清洗：转为字符串，防止 Excel 里的数字报错
     df['question'] = df['question'].astype(str)
     df['answer'] = df['answer'].astype(str)
     df['department'] = df['department'].astype(str)
@@ -94,13 +108,7 @@ def process_and_ingest():
     for i in tqdm(range(0, total_rows, BATCH_SIZE), desc="Processing"):
         batch = df.iloc[i : i + BATCH_SIZE]
         
-        # === 关键策略：Embedding 谁？===
-        # 策略：我们向量化“问题”（A列）。
-        # 因为用户的提问通常和 A 列最相似（都是求助、咨询）。
-        # 如果我们向量化“回答”，用户问“怎么取钱”，回答是“携带身份证...”，语义匹配度反而可能不高。
         texts_to_embed = batch['question'].tolist()
-        
-        # 准备其他字段
         answers = batch['answer'].tolist()
         departments = batch['department'].tolist()
         
@@ -109,18 +117,22 @@ def process_and_ingest():
         
         data_to_insert = []
         for j, question_text in enumerate(texts_to_embed):
-            # === 关键策略：RAG 上下文存什么？===
-            # 我们把“问题”和“回答”拼在一起存入 `text` 字段。
-            # 这样检索出来给大模型看的时候，大模型能看到完整的上下文。
-            rag_context = f"市民诉求：{question_text}\n官方回复：{answers[j]}"
+            # === 生成唯一 ID ===
+            # 直接在这里生成 doc_id，替代后续的迁移脚本
+            current_answer = answers[j]
+            doc_id = generate_doc_id(question_text, current_answer)
+
+            # RAG 上下文
+            rag_context = f"市民诉求：{question_text}\n官方回复：{current_answer}"
             
             data_to_insert.append({
                 "vector": vectors[j],
-                "text": rag_context,            # 给大模型看的内容
-                "department": departments[j],   # 过滤用的标签
-                "metadata": {                   # 原始数据备份
+                "text": rag_context,            
+                "department": departments[j],   
+                "metadata": {                   
+                    "doc_id": doc_id,
                     "question": question_text,
-                    "answer": answers[j]
+                    "answer": current_answer
                 }
             })
             
