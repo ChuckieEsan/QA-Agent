@@ -27,12 +27,11 @@ class Settings:
     # 原始数据路径
     RAW_DATA_PATH: Path = DATA_DIR / "raw" / "wzlz_municipal_has_reply.xlsx"
 
-    TEST_DATA_PATH: Path = DATA_DIR / "processed" / "test_set.jsonl"
+    QUERY_TEST_DATA_PATH: Path = DATA_DIR / "processed" / "query_test_data.jsonl"
 
     # ================= 模型配置 =================
     # 这里的 Key 是你在代码里调用的名字，Value 是实际路径
     MODEL_PATHS: dict = {
-        # 你的 BGE-M3 模型路径
         "embedding": MODEL_DIR / "bge-m3",
         # 如果你未来加 Rerank，直接在这里加一行即可
         # "reranker": MODEL_DIR / "bge-reranker-base",

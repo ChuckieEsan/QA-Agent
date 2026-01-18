@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.utils.data import generate_doc_id
 
 DATA_PATH = str(settings.RAW_DATA_PATH)
-OUTPUT_PATH = str(settings.TEST_DATA_PATH)
+OUTPUT_PATH = str(settings.QUERY_TEST_DATA_PATH)
 dashscope.api_key = settings.QWEN_API_KEY
 
 SAMPLE_SIZE = 300
