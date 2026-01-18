@@ -26,7 +26,7 @@ def init_milvus(client):
         print(f"检测到集合 {COLLECTION_NAME} 已存在，正在删除重建...")
         client.drop_collection(COLLECTION_NAME)
 
-    print("🔨 创建新集合 Schema...")
+    print("创建新集合 Schema...")
     client.create_collection(
         collection_name=COLLECTION_NAME,
         dimension=1024, # BGE-M3 维度
@@ -36,12 +36,7 @@ def init_milvus(client):
     )
 
 def process_and_ingest():
-    # 1. 读取数据
-    if not os.path.exists(DATA_PATH):
-        print(f"❌ 错误：找不到文件 {DATA_PATH}，请检查路径！")
-        return
-
-    print(f"📖 读取数据: {DATA_PATH}")
+    print(f"读取数据: {DATA_PATH}")
     df = pd.read_excel(DATA_PATH)
     
     # 列名映射
@@ -59,7 +54,7 @@ def process_and_ingest():
     # 检查是否映射成功
     required_cols = ['question', 'answer']
     if not all(col in df.columns for col in required_cols):
-        print(f"❌ 列名匹配失败！当前列名: {df.columns.tolist()}")
+        print(f"列名匹配失败！当前列名: {df.columns.tolist()}")
         print("请确保 Excel 包含：'问政内容' 和 '回复内容'")
         return
 
@@ -73,11 +68,11 @@ def process_and_ingest():
 
     # 2. 加载模型
     device = get_device()
-    print(f"📥 加载 Embedding 模型: {MODEL_PATH} ...")
+    print(f"加载 Embedding 模型: {MODEL_PATH} ...")
     try:
         embed_model = SentenceTransformer(MODEL_PATH, device=device)
     except Exception as e:
-        print(f"❌ 模型加载失败: {e}")
+        print(f"模型加载失败: {e}")
         return
 
     # 3. 初始化 Milvus
@@ -87,7 +82,7 @@ def process_and_ingest():
 
     # 4. 批量处理
     total_rows = len(df)
-    print("🚀 开始向量化并入库...")
+    print("开始向量化并入库...")
     
     for i in tqdm(range(0, total_rows, BATCH_SIZE), desc="Processing"):
         batch = df.iloc[i : i + BATCH_SIZE]
@@ -122,11 +117,11 @@ def process_and_ingest():
             
         client.insert(COLLECTION_NAME, data_to_insert)
 
-    print(f"\n🎉 入库完成！数据库: {DB_PATH}")
+    print(f"\n入库完成！数据库: {DB_PATH}")
 
     # 5. 验证测试
     test_query = "雨露计划什么时候发？"
-    print(f"\n🔎 测试检索: '{test_query}'")
+    print(f"\n测试检索: '{test_query}'")
     query_vec = embed_model.encode([test_query], normalize_embeddings=True)
     
     res = client.search(
