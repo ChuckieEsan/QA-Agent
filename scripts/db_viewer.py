@@ -2,13 +2,13 @@ import streamlit as st
 import pandas as pd
 from pymilvus import MilvusClient
 import os
+import sys
 
 sys.path.append(os.getcwd())
 
 from app.core.config import settings
 
 # ================= 配置 =================
-# 页面配置
 st.set_page_config(layout="wide", page_title="Milvus 数据库查看器")
 DB_PATH = str(settings.MILVUS_DB_PATH)
 COLLECTION_NAME = settings.COLLECTION_NAME

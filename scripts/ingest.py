@@ -10,6 +10,7 @@ import torch
 sys.path.append(os.getcwd())
 
 from app.core.config import settings
+from app.utils import *
 
 # ================= 配置区域 =================
 BATCH_SIZE = 16  
@@ -18,23 +19,6 @@ DB_PATH = str(settings.MILVUS_DB_PATH)
 COLLECTION_NAME = settings.COLLECTION_NAME
 DATA_PATH = str(settings.RAW_DATA_PATH)
 
-def get_device():
-    if torch.cuda.is_available():
-        return "cuda"
-    return "cpu"
-
-def generate_doc_id(question, answer):
-    """
-    基于内容的哈希生成。
-    将 问题+回答 拼接后计算 MD5，截取前 16 位作为 ID。
-    保持与迁移脚本逻辑一致。
-    """
-    # 确保转为字符串，防止报错
-    raw_str = str(question) + str(answer)
-    # 计算 MD5
-    hash_object = hashlib.md5(raw_str.encode('utf-8'))
-    # 获取 16进制字符串，截取前16位
-    return hash_object.hexdigest()[:16]
 
 def init_milvus(client):
     """初始化数据库集合 Schema"""

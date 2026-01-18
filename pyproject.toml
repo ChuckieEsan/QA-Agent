@@ -13,6 +13,7 @@ dependencies = [
     "milvus-lite>=2.5.1",
     "openpyxl>=3.1.5",
     "pymilvus>=2.6.6",
+    "python-dotenv>=1.2.1",
     "qwen-agent[code-interpreter,gui,mcp,rag]>=0.0.31",
     "ragas>=0.4.3",
     "rank-bm25>=0.2.2",
