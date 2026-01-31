@@ -14,4 +14,7 @@ models/
 data/
 -use-symlinks
 
+# Logs
+log
+
 .env

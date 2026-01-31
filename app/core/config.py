@@ -26,6 +26,7 @@ class Settings:
     
     # 原始数据路径
     RAW_DATA_PATH: Path = DATA_DIR / "raw" / "wzlz_municipal_has_reply.xlsx"
+    RAW_DATA_DB_PATH: Path = DATA_DIR / "raw_data.db"
 
     QUERY_TEST_DATA_PATH: Path = DATA_DIR / "processed" / "query_test_data.jsonl"
 
