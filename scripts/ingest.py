@@ -12,10 +12,10 @@ from app.utils import generate_doc_id, get_device, clean_text
 
 # ================= 配置区域 =================
 BATCH_SIZE = 16  
-MODEL_PATH = str(settings.MODEL_PATHS["embedding"])
-MILVUS_DB_PATH = str(settings.MILVUS_DB_PATH)
-COLLECTION_NAME = settings.COLLECTION_NAME
-SQLITE_DB_PATH = str(settings.RAW_DATA_DB_PATH)
+MODEL_PATH = str(settings.models.embedding_model_path)
+MILVUS_DB_PATH = str(settings.paths.milvus_db_path)
+COLLECTION_NAME = settings.vectordb.collection_name
+SQLITE_DB_PATH = str(settings.paths.raw_data_db_path)
 
 def init_milvus(client):
     """初始化数据库集合 Schema"""
@@ -26,7 +26,7 @@ def init_milvus(client):
     print("🔨 创建新集合 Schema...")
     client.create_collection(
         collection_name=COLLECTION_NAME,
-        dimension=1024, # BGE-M3 维度
+        dimension=settings.models.embedding_size, # BGE-M3 维度
         metric_type="COSINE",
         auto_id=True,
         enable_dynamic_field=True 

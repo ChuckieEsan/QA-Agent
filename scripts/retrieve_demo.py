@@ -9,9 +9,9 @@ sys.path.append(os.getcwd())
 
 from app.core.config import settings
 
-MODEL_PATH = str(settings.MODEL_PATHS['embedding'])
-DB_PATH = str(settings.MILVUS_DB_PATH)
-COLLECTION_NAME = settings.COLLECTION_NAME
+MODEL_PATH = str(settings.models.embedding_model_path)
+DB_PATH = str(settings.paths.milvus_db_path)
+COLLECTION_NAME = settings.vectordb.collection_name
 print(f"✅ 从 Config 加载配置")
 
 # 默认检索数量
