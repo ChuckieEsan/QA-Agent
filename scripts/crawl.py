@@ -218,9 +218,13 @@ class DatabaseManager:
 class ProgressTracker:
     """进度追踪器"""
     
-    def __init__(self, total_pages: int):
-        self.total_pages = total_pages
-        self.current_page = 0
+    def __init__(self, start_page: int, end_page: int):
+        self.start_page = start_page
+        self.end_page = end_page
+        self.total_pages = end_page - start_page + 1
+        
+        self.current_page_num = 0      # 当前实际页码（如 113）
+        self.completed_count = 0       # 已完成页数（1, 2, 3...）
         self.success_items = 0
         self.failed_items = 0
         self.skipped_items = 0
@@ -228,9 +232,10 @@ class ProgressTracker:
         self.lock = asyncio.Lock()
     
     async def update(self, page_num: int, success: int = 0, failed: int = 0, skipped: int = 0):
-        """更新进度"""
+        """更新进度（page_num 是实际页码）"""
         async with self.lock:
-            self.current_page = page_num
+            self.current_page_num = page_num
+            self.completed_count += 1    # 每调用一次，完成一页
             self.success_items += success
             self.failed_items += failed
             self.skipped_items += skipped
@@ -238,33 +243,45 @@ class ProgressTracker:
     def display(self):
         """显示进度条"""
         elapsed = time.time() - self.start_time
-        percent = (self.current_page / self.total_pages) * 100 if self.total_pages > 0 else 0
         
-        # 估算剩余时间
-        if self.current_page > 0:
-            avg_time_per_page = elapsed / self.current_page
-            remaining_pages = self.total_pages - self.current_page
+        if self.total_pages > 0:
+            percent = (self.completed_count / self.total_pages) * 100
+        else:
+            percent = 0
+        
+        # 估算剩余时间（基于平均速度）
+        if self.completed_count > 0:
+            avg_time_per_page = elapsed / self.completed_count
+            remaining_pages = self.total_pages - self.completed_count
             eta_seconds = avg_time_per_page * remaining_pages
             eta = str(timedelta(seconds=int(eta_seconds)))
         else:
             eta = "计算中..."
         
+        # 进度条
         bar_length = 40
-        filled = int(bar_length * percent / 100)
+        filled = int(bar_length * min(percent, 100) / 100)  # min 防止超 100%
         bar = "█" * filled + "░" * (bar_length - filled)
         
-        sys.stdout.write(f"\r\033[K")  # 清除行
-        sys.stdout.write(f"进度: |{bar}| {percent:.1f}% ({self.current_page}/{self.total_pages}) "
-                        f"成功:{self.success_items} 跳过:{self.skipped_items} 失败:{self.failed_items} "
-                        f"用时:{timedelta(seconds=int(elapsed))} 剩余:{eta}")
+        sys.stdout.write(f"\r\033[K")
+        sys.stdout.write(f"进度: |{bar}| {percent:.1f}% "
+                        f"({self.completed_count}/{self.total_pages}页) "
+                        f"当前页:{self.current_page_num} "
+                        f"成功:{self.success_items} "
+                        f"跳过:{self.skipped_items} "
+                        f"失败:{self.failed_items} | "
+                        f"用时:{timedelta(seconds=int(elapsed))} "
+                        f"剩余:{eta}")
         sys.stdout.flush()
     
     def summary(self) -> Dict[str, Any]:
         """获取摘要"""
         elapsed = time.time() - self.start_time
         return {
+            "任务范围": f"{self.start_page}-{self.end_page}",
             "总页数": self.total_pages,
-            "已爬取": self.current_page,
+            "已完成": self.completed_count,
+            "当前页": self.current_page_num,
             "成功入库": self.success_items,
             "跳过(已存在)": self.skipped_items,
             "失败": self.failed_items,
@@ -272,6 +289,7 @@ class ProgressTracker:
             "平均速度": f"{self.success_items/max(elapsed/60, 1):.1f}条/分钟"
         }
 
+        
 class LZEPSpider:
     """爬虫主类"""
     
@@ -279,7 +297,7 @@ class LZEPSpider:
         self.config = config
         self.db = DatabaseManager(db_path=settings.RAW_DATA_DB_PATH)
         self.proxy_rotator = proxy_rotator
-        self.progress = ProgressTracker(config.total_pages)
+        self.progress = ProgressTracker(config.start_page, config.end_page)
         self.base_url = "https://wen.lzep.cn"
         self.list_pattern = "/node/reply/{}.html"
         
@@ -315,7 +333,8 @@ class LZEPSpider:
             ]),
             viewport={"width": 1920, "height": 1080},
             locale="zh-CN",
-            timezone_id="Asia/Shanghai"
+            timezone_id="Asia/Shanghai",
+            ignore_https_errors=True,
         )
         
         # 反检测脚本
@@ -378,11 +397,11 @@ class LZEPSpider:
             data["url"] = item["url"]
             data["title"] = await question_element.locator("h4").text_content()
             data["dept"] = await question_element.locator(".info >> li", has_text="问政对象").locator("span").text_content()
-            data["question_time"] = await question_element.locator(".time").text_content()
-            data["question"] = await question_element.locator(".content-text").text_content()
+            data["question_time"] = await question_element.locator(".time").first.text_content()
+            data["question"] = await question_element.locator(".content-text").first.text_content()
             
-            data["answer_time"] = await answer_element.locator(".time").text_content()
-            data["answer"] = await answer_element.locator(".content-text").text_content()
+            data["answer_time"] = await answer_element.locator(".time").first.text_content()
+            data["answer"] = await answer_element.locator(".content-text").first.text_content()
             data["category"] = None
             
             print(data)
