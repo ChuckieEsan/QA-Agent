@@ -29,3 +29,23 @@ dependencies = [
 [[tool.uv.index]]
 url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 default = true
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "pytest-mock>=3.15.1",
+]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --cov=app --cov-report=term-missing"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+# 让 pytest 自动把当前目录加入 sys.path
+pythonpath = "."
+# 过滤一些第三方库的警告
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]

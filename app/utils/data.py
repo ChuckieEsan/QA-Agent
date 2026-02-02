@@ -12,13 +12,7 @@ def generate_doc_id(question: str, answer: str) -> str:
 
 def clean_text(text: str) -> str:
     """
-    清理文本中的特殊字符（\n, \t, \xa0, 连续空格等）
-    
-    Args:
-        text: 原始文本（可能为 None）
-        
-    Returns:
-        清理后的纯文本
+    清理文本中的特殊字符（\\n, \\t, \\xa0, 连续空格等）
     """
     if not text:
         return ""

@@ -18,3 +18,7 @@ data/
 log
 
 .env
+
+# Test files
+.pytest_cache
+.coverage
