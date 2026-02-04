@@ -17,7 +17,7 @@ MILVUS_DB_PATH = str(settings.paths.milvus_db_path)
 COLLECTION_NAME = settings.vectordb.collection_name
 SQLITE_DB_PATH = str(settings.paths.raw_data_db_path)
 
-def init_milvus(client):
+def init_milvus(client: MilvusClient):
     """初始化数据库集合 Schema"""
     if client.has_collection(COLLECTION_NAME):
         print(f"检测到集合 {COLLECTION_NAME} 已存在，正在删除重建...")
@@ -32,7 +32,7 @@ def init_milvus(client):
         enable_dynamic_field=True 
     )
 
-def fetch_data_from_sqlite(db_path):
+def fetch_data_from_sqlite(db_path: str):
     """从 SQLite 读取所有已爬取的数据"""
     if not os.path.exists(db_path):
         raise FileNotFoundError(f"找不到数据库文件: {db_path}")

@@ -126,7 +126,7 @@ class LoggingConfig(BaseConfig):
     )
     file_enabled: bool = Field(default=True, description="是否启用文件日志")
     file_path: Path = Field(
-        default=PROJECT_ROOT / "logs" / "govpulse.log", description="日志文件路径"
+        default=PROJECT_ROOT / "log" / "govpulse.log", description="日志文件路径"
     )
     max_file_size: int = Field(
         default=10 * 1024 * 1024, description="最大日志文件大小（字节）"  # 10MB
