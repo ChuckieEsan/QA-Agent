@@ -49,13 +49,6 @@ class PathConfig(BaseConfig):
         description="查询测试数据路径",
     )
 
-    # 向量数据库路径
-    milvus_db_path: str = Field(
-        default=str(PROJECT_ROOT / "data" / "milvus_db" / "gov_pulse.db"),
-        description="Milvus数据库路径",
-    )
-
-
 class ModelConfig(BaseConfig):
     """模型配置"""
 
@@ -79,6 +72,10 @@ class ModelConfig(BaseConfig):
 
 class MilvusDBConfig(BaseConfig):
     """向量数据库配置"""
+    db_path: str = Field(
+        default=str(PROJECT_ROOT / "data" / "milvus_db" / "gov_pulse.db"),
+        description="Milvus数据库路径",
+    )
 
     collection_name: str = Field(default="gov_cases", description="集合名称")
     vector_dimension: int = Field(default=1024, description="向量维度（BGE-M3为1024）")
@@ -126,7 +123,7 @@ class LoggingConfig(BaseConfig):
     )
     file_enabled: bool = Field(default=True, description="是否启用文件日志")
     file_path: Path = Field(
-        default=PROJECT_ROOT / "log" / "govpulse.log", description="日志文件路径"
+        default=PROJECT_ROOT / "logs" / "govpulse.log", description="日志文件路径"
     )
     max_file_size: int = Field(
         default=10 * 1024 * 1024, description="最大日志文件大小（字节）"  # 10MB

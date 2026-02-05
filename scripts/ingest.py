@@ -13,7 +13,7 @@ from app.utils import generate_doc_id, get_device, clean_text
 # ================= 配置区域 =================
 BATCH_SIZE = 16  
 MODEL_PATH = str(settings.models.embedding_model_path)
-MILVUS_DB_PATH = str(settings.paths.milvus_db_path)
+MILVUS_DB_PATH = str(settings.vectordb.db_path)
 COLLECTION_NAME = settings.vectordb.collection_name
 SQLITE_DB_PATH = str(settings.paths.raw_data_db_path)
 

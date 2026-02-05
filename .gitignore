@@ -15,10 +15,13 @@ data/
 -use-symlinks
 
 # Logs
-log
+logs
 
 .env
 
 # Test files
 .pytest_cache
 .coverage
+
+# Cache files
+.Cache

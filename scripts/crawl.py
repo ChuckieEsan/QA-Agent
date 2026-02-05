@@ -35,7 +35,7 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - [%(funcName)s] %(message)s",
     handlers=[
         logging.FileHandler(
-            f'log/spider_{datetime.now().strftime("%Y%m%d")}.log', encoding="utf-8"
+            f'{settings.paths.log_dir}/spider_{datetime.now().strftime("%Y%m%d")}.log', encoding="utf-8"
         ),
         logging.StreamHandler(sys.stdout),
     ],
