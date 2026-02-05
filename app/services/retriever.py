@@ -43,8 +43,8 @@ class HybridVectorRetriever:
         )
 
         # 2. 连接向量数据库
-        print(f"🔌 连接Milvus: {settings.paths.milvus_db_path} ...")
-        self.client = MilvusClient(str(settings.paths.milvus_db_path))
+        print(f"🔌 连接Milvus: {settings.vectordb.db_path} ...")
+        self.client = MilvusClient(str(settings.vectordb.db_path))
         self.collection = settings.vectordb.collection_name
 
         # 3. 混合策略配置
