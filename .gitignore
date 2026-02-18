@@ -28,3 +28,5 @@ logs
 
 # Cache files
 .Cache
+
+!scripts/data
