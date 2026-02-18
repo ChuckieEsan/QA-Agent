@@ -1,6 +1,7 @@
 import hashlib
 import re
 
+
 def generate_doc_id(question: str, answer: str) -> str:
     """
     基于内容的 MD5 指纹生成
@@ -31,3 +32,4 @@ def clean_text(text: str) -> str:
     
     # 5. 去除首尾空格
     return text.strip()
+

@@ -6,7 +6,7 @@ import sys
 
 sys.path.append(os.getcwd())
 
-from app.core.config import settings
+from config.setting import settings
 
 # ================= 配置 =================
 st.set_page_config(layout="wide", page_title="Milvus 数据库查看器")

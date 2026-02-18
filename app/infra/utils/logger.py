@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 
-from app.core.config import settings
+from config.setting import settings
 
 
 class CustomFormatter(logging.Formatter):

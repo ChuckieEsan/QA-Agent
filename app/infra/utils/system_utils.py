@@ -1,5 +1,5 @@
 import torch
-import os
+
 
 def get_device() -> str:
     """自动检测计算设备"""

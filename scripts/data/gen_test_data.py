@@ -10,8 +10,8 @@ from dashscope import Generation
 
 sys.path.append(os.getcwd())
 
-from app.core.config import settings
-from app.utils.data import generate_doc_id
+from config.setting import settings
+from app.infra.utils import generate_doc_id
 
 DATA_PATH = str(settings.RAW_DATA_PATH)
 OUTPUT_PATH = str(settings.QUERY_TEST_DATA_PATH)

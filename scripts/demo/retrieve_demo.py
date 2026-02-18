@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer
 
 sys.path.append(os.getcwd())
 
-from app.core.config import settings
+from config.setting import settings
 
 MODEL_PATH = str(settings.models.embedding_model_path)
 DB_PATH = str(settings.paths.milvus_db_path)
