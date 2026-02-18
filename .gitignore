@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# Visual Studio Code settings
+.vscode
+
 # Models and data
 models/
 data/

@@ -308,8 +308,6 @@ class LoggingContext:
             logger.setLevel(level)
 
 
-# ========== 测试代码 ==========
-
 if __name__ == "__main__":
     """测试日志系统"""
     setup_logging()
