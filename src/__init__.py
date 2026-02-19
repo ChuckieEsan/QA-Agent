@@ -7,23 +7,26 @@ GovPulse - 泸州市政务智能问答系统 (Agentic RAG)
 __version__ = "0.1.0"
 __author__ = "GovPulse Team"
 
-# 核心引擎
-from src.app.services.rag_engine import (
-    AgenticRAGEngine,
-    query_agentic_rag,
-    query_rag,
-)
+# Agent 层
+from src.app.agents.rag_agent import RagAgent, query_agentic_rag
 
 # LLM 服务
-from src.app.services.llm_service import (
+from src.app.infra.llm.llm_service import (
     LLMService,
     AgentDecision,
     get_llm_service,
     generate_agentic_rag_response,
 )
 
-# 检索器
-from src.app.components.retrievers.hybrid_retriever import (
+# 组件层
+from src.app.components import (
+    BaseGenerator,
+    LLMGenerator,
+    BaseClassifier,
+    GovClassifier,
+    BaseMemory,
+    ConversationMemory,
+    BaseRetriever,
     HybridVectorRetriever,
     retrieve_with_details,
     get_retriever_instance,
@@ -49,11 +52,14 @@ from src.config.setting import (
     LLMConfig,
 )
 
+# 兼容性：保留旧接口别名
+AgenticRAGEngine = RagAgent
+
 __all__ = [
-    # 核心引擎
-    "AgenticRAGEngine",
+    # Agent 层
+    "RagAgent",
+    "AgenticRAGEngine",  # 兼容别名
     "query_agentic_rag",
-    "query_rag",
 
     # LLM 服务
     "LLMService",
@@ -61,7 +67,14 @@ __all__ = [
     "get_llm_service",
     "generate_agentic_rag_response",
 
-    # 检索器
+    # 组件
+    "BaseGenerator",
+    "LLMGenerator",
+    "BaseClassifier",
+    "GovClassifier",
+    "BaseMemory",
+    "ConversationMemory",
+    "BaseRetriever",
     "HybridVectorRetriever",
     "retrieve_with_details",
     "get_retriever_instance",
