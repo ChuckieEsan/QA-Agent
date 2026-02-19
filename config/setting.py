@@ -4,11 +4,8 @@ from typing import Dict, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from dotenv import load_dotenv
 
-# __file__ 是 config.py 的位置
-# .parent -> app/core/
-# .parent.parent -> app/
-# .parent.parent.parent -> GovPulse/ (项目根目录)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+# __file__ 是 setting.py 的位置
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 env_path = PROJECT_ROOT / ".env"
 if env_path.exists():
@@ -273,7 +270,6 @@ if __name__ == "__main__":
     print("\n🗄️ 向量数据库配置:")
     print(f"  集合名称: {settings.vectordb.collection_name}")
     print(f"  向量维度: {settings.vectordb.vector_dimension}")
-    print(f"  数据库路径: {settings.paths.milvus_db_path}")
     
     # 显示检索器配置
     print("\n🔍 检索器配置:")
