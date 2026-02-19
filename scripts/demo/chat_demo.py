@@ -6,7 +6,7 @@ from openai import AsyncClient
 
 sys.path.append(os.getcwd())
 
-from config.setting import settings
+from src.config.setting import settings
 
 init(autoreset=True)
 

@@ -19,7 +19,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 
 sys.path.append(os.getcwd())
-from config.setting import settings
+from src.config.setting import settings
 
 import aiosqlite
 from playwright.async_api import (

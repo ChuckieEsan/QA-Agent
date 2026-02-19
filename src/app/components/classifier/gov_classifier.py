@@ -5,7 +5,7 @@
 
 from typing import Dict, List
 from src.app.components.classifier.base_classifier import BaseClassifier, GovRequestType
-from src.app.services.llm_service import LLMService, get_llm_service
+from src.app.infra.llm.llm_service import LLMService, get_llm_service
 from src.app.infra.utils.logger import get_logger
 
 logger = get_logger(__name__)

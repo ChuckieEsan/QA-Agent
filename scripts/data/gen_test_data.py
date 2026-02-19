@@ -2,7 +2,6 @@ import os
 import sys
 import pandas as pd
 import json
-import hashlib
 import time
 from tqdm import tqdm
 import dashscope
@@ -10,8 +9,8 @@ from dashscope import Generation
 
 sys.path.append(os.getcwd())
 
-from config.setting import settings
-from app.infra.utils import generate_doc_id
+from src.config.setting import settings
+from src.app.infra.utils import generate_doc_id
 
 DATA_PATH = str(settings.RAW_DATA_PATH)
 OUTPUT_PATH = str(settings.QUERY_TEST_DATA_PATH)

@@ -7,8 +7,8 @@ from sentence_transformers import SentenceTransformer
 
 sys.path.append(os.getcwd())
 
-from config.setting import settings
-from app.infra.utils import generate_doc_id, get_device, clean_text
+from src.config.setting import settings
+from src.app.infra.utils import generate_doc_id, get_device, clean_text
 
 # ================= 配置区域 =================
 BATCH_SIZE = 16  

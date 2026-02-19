@@ -7,7 +7,7 @@ import sys
 
 sys.path.append(os.getcwd())
 
-from config.setting import settings
+from src.config.setting import settings
 
 def main():
     # 1. 加载资源
