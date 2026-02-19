@@ -13,10 +13,14 @@
 # limitations under the License.
 """An agent implemented by assistant with qwen3-coder"""
 import os  # noqa
+import sys
+
+sys.path.append(os.getcwd())
 
 from qwen_agent.agents import Assistant
 # from qwen_agent.gui import WebUI
 from qwen_agent.utils.output_beautify import typewriter_print
+from src.config.setting import settings
 
 
 def init_agent_service():
@@ -34,7 +38,7 @@ def init_agent_service():
         # Use the OpenAI-compatible model service provided by DashScope:
         'model': 'qwen3-coder-480b-a35b-instruct',
         'model_server': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-        'api_key': 'sk-cb85fbb3fa5e4d30bd37914938b572d2',
+        'api_key': settings.llm.api_key,
         'generate_cfg': {
             # Using the API's native tool call interface
             'use_raw_api': True,
@@ -110,6 +114,5 @@ def app_gui():
 
 
 if __name__ == '__main__':
-    # test()
     app_tui()
     # app_gui()
