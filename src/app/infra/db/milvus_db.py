@@ -5,9 +5,9 @@ Milvus 向量数据库客户端实现
 
 from typing import Optional, Dict, List
 from pymilvus import MilvusClient
-from app.infra.db.base_db import BaseDBClient
-from app.infra.utils.logger import get_logger
-from config.setting import settings
+from src.app.infra.db.base_db import BaseDBClient
+from src.app.infra.utils.logger import get_logger
+from src.config.setting import settings
 
 logger = get_logger(__name__)
 

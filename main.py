@@ -15,7 +15,7 @@
 import os  # noqa
 
 from qwen_agent.agents import Assistant
-from qwen_agent.gui import WebUI
+# from qwen_agent.gui import WebUI
 from qwen_agent.utils.output_beautify import typewriter_print
 
 
@@ -52,15 +52,7 @@ def init_agent_service():
                 'fetch': {
                     'command': 'uvx',
                     'args': ['mcp-server-fetch']
-                },
-                'filesystem': {
-                    'command': 'npx',
-                    'args': [
-                        '-y',
-                        '@modelcontextprotocol/server-filesystem',
-                        '~/Desktop/'
-                    ]
-                },
+                }
             }
         },
         'image_gen'
@@ -119,5 +111,5 @@ def app_gui():
 
 if __name__ == '__main__':
     # test()
-    # app_tui()
-    app_gui()
+    app_tui()
+    # app_gui()

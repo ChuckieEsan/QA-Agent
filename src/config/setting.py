@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from dotenv import load_dotenv
 
 # __file__ 是 setting.py 的位置
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 env_path = PROJECT_ROOT / ".env"
 if env_path.exists():

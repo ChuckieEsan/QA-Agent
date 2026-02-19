@@ -1,7 +1,7 @@
 [project]
 name = "qa-agent"
 version = "0.1.0"
-description = "Add your description here"
+description = "GovPulse - 泸州市政务智能问答系统 (Agentic RAG)"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -41,11 +41,10 @@ dev = [
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra -q --cov=app --cov-report=term-missing"
+addopts = "-ra -q --cov=src --cov-report=term-missing"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-# 让 pytest 自动把当前目录加入 sys.path
-pythonpath = "."
+pythonpath = ["src", "."]
 # 过滤一些第三方库的警告
 filterwarnings = [
     "ignore::DeprecationWarning",

@@ -38,7 +38,7 @@ def mock_settings(monkeypatch):
     """
     模拟应用配置
     """
-    from config.setting import settings
+    from src.config.setting import settings
 
     # 使用 monkeypatch 修改 settings 的属性
     # 注意：这里假设 settings 使用 @property 或可以被直接修改
@@ -150,7 +150,7 @@ def hybrid_retriever_instance(mocker, mock_embedding_model, mock_milvus_client):
     跳过真实初始化过程
     """
     # 重置单例
-    from app.components.retrievers.hybrid_retriever import HybridVectorRetriever
+    from src.app.components.retrievers.hybrid_retriever import HybridVectorRetriever
 
     HybridVectorRetriever._instance = None
     HybridVectorRetriever._is_initialized = False
