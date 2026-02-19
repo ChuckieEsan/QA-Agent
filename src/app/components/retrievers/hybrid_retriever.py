@@ -1,51 +1,85 @@
+"""
+混合向量检索器
+结合向量检索 + 多维度重排 + 缓存的完整实现
+"""
+
 import threading
 import numpy as np
-from typing import List, Dict, Any, Tuple
-from datetime import datetime, timedelta
-from pymilvus import MilvusClient
+from typing import List, Dict, Any, Tuple, Optional
+from datetime import datetime
 from sentence_transformers import SentenceTransformer
+
 from src.config.setting import settings
 from src.app.infra.utils import get_device
+from src.app.infra.db.milvus_db import get_milvus_client
+from .base_retriever import BaseRetriever
 
 
-class HybridVectorRetriever:
+class HybridVectorRetriever(BaseRetriever):
     """
-    纯混合策略向量检索器
-    结合固定阈值+动态调整+重排的完整流程
+    混合向量检索器
+
+    继承自 BaseRetriever，实现具体的向量检索逻辑
     """
 
     _instance = None
     _lock = threading.Lock()
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, config: Optional[Dict[str, Any]] = None):
+        """单例模式"""
         if not cls._instance:
             with cls._lock:
                 if not cls._instance:
                     cls._instance = super(HybridVectorRetriever, cls).__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        """
+        初始化混合检索器
+
+        Args:
+            config: 配置字典（可选），如果为 None 则使用默认配置
+        """
         if getattr(self, "_is_initialized", False):
             return
 
+        # 合并配置：用户配置优先，否则使用 settings
+        default_config = {
+            "top_k": settings.vectordb.default_top_k,
+            "cache_enabled": settings.retriever.enable_cache,
+            "cache_ttl": settings.retriever.cache_ttl_minutes * 60,
+            "max_cache_size": settings.retriever.cache_max_size,
+            "min_similarity": settings.retriever.base_threshold,
+        }
+
+        if config:
+            default_config.update(config)
+
+        super().__init__(default_config)
+
         print("🔄 [HybridRetriever] 初始化混合策略检索器...")
-        self._init_resources()
+        self.initialize()
         self._is_initialized = True
         print("✅ [HybridRetriever] 初始化完成")
 
-    def _init_resources(self):
-        """初始化核心资源"""
-        # 1. 加载Embedding模型
+    def initialize(self) -> None:
+        """
+        初始化核心资源
+
+        实现 BaseRetriever 的抽象方法
+        """
+        # 1. 加载 Embedding 模型
         self.device = get_device()
-        print(f"📥 加载Embedding模型: {settings.models.embedding_model_path} ...")
+        print(f"📥 加载 Embedding 模型: {settings.models.embedding_model_path} ...")
         self.embed_model = SentenceTransformer(
-            str(settings.models.embedding_model_path), device=self.device
+            str(settings.models.embedding_model_path),
+            device=self.device
         )
 
         # 2. 连接向量数据库
-        print(f"🔌 连接Milvus: {settings.vectordb.db_path} ...")
-        self.client = MilvusClient(str(settings.vectordb.db_path))
-        self.collection = settings.vectordb.collection_name
+        print(f"🔌 连接 Milvus: {settings.vectordb.db_path} ...")
+        self.milvus_client = get_milvus_client()
+        self.collection_name = settings.vectordb.collection_name
 
         # 3. 混合策略配置
         self.base_threshold = settings.retriever.base_threshold
@@ -60,40 +94,46 @@ class HybridVectorRetriever:
             "length": settings.retriever.weight_length,
         }
 
-        # TODO: 5. 部门权威性映射
+        # 5. 部门权威性映射
         self.dept_authority = settings.retriever.department_authority
 
-        # TODO: 6. 缓存. 后续可以改成 Redis
-        self.cache = {}
-        self.cache_ttl = timedelta(minutes=5)
+        # 6. 时间衰减权重
+        self.recency_weights = settings.retriever.recency_weights
 
-    def retrieve(self, query: str, top_k: int = None) -> Tuple[str, List[Dict], Dict]:
+    def retrieve(
+        self,
+        query: str,
+        top_k: Optional[int] = None,
+        **kwargs
+    ) -> Tuple[str, List[Dict[str, Any]], Dict[str, Any]]:
         """
-        混合策略检索主函数
+        执行混合检索
 
-        参数:
+        实现 BaseRetriever 的抽象方法
+
+        Args:
             query: 查询文本
-            top_k: 返回结果数量（None时使用配置默认值）
+            top_k: 返回结果数量
+            **kwargs: 其他参数（如阈值调整等）
 
-        返回:
+        Returns:
             (context_str, results, metadata)
         """
         start_time = datetime.now()
 
+        # 使用配置的 top_k
         if top_k is None:
-            top_k = min(self.max_results, max(self.min_results, 5))
+            top_k = self.default_top_k
 
         # 1. 检查缓存
-        cache_key = f"{query}_{top_k}"
-        if cache_key in self.cache:
-            cache_entry = self.cache[cache_key]
-            if datetime.now() - cache_entry["timestamp"] < self.cache_ttl:
+        if self.cache_enabled:
+            cache_key = self._get_cache_key(query, top_k, **kwargs)
+            cached_result = self._check_cache(cache_key)
+            if cached_result:
+                context, results, metadata = cached_result
+                metadata["cache_hit"] = True
                 print(f"🔄 使用缓存结果: {cache_key[:30]}...")
-                return (
-                    cache_entry["context"],
-                    cache_entry["results"],
-                    cache_entry["metadata"],
-                )
+                return context, results, metadata
 
         try:
             # 2. 向量检索
@@ -101,26 +141,26 @@ class HybridVectorRetriever:
 
             # 放宽检索数量，为后续筛选和重排准备
             search_limit = top_k * 3
-            raw_results = self.client.search(
-                collection_name=self.collection,
-                data=query_vec,
-                limit=search_limit,
+            raw_results = self.milvus_client.search(
+                vectors=query_vec.tolist(),
+                top_k=search_limit,
                 output_fields=["text", "department", "metadata"],
             )
 
             if not raw_results or not raw_results[0]:
                 result = ("未在知识库中找到相关信息。", [], {})
-                self._update_cache(cache_key, result, start_time)
+                if self.cache_enabled:
+                    self._update_cache(cache_key, *result)
                 return result
 
             # 3. 转换结果并计算相似度
             processed_results = []
             for hit in raw_results[0]:
-                # 特别注意, 在 Milvus 2.x 版本中, distance 对应的就是余弦相似度
+                # Milvus 2.x 中，distance 对应余弦相似度
                 processed_hit = {
-                    "entity": hit["entity"],
-                    "distance": 1 - hit["distance"],
-                    "similarity": hit["distance"],
+                    "entity": hit.get("entity", hit),
+                    "distance": 1 - hit.get("distance", 0),
+                    "similarity": hit.get("distance", 0),
                 }
                 processed_results.append(processed_hit)
 
@@ -131,10 +171,10 @@ class HybridVectorRetriever:
             reranked_results = self._hybrid_rerank(query, filtered_results)
 
             # 6. 截取最终结果
-            final_results = reranked_results[: min(top_k, len(reranked_results))]
+            final_results = reranked_results[:min(top_k, len(reranked_results))]
 
             # 7. 构建上下文
-            context_str = self._build_context(query, final_results)
+            context_str = self.build_context(query, final_results)
 
             # 8. 准备元数据
             metadata = {
@@ -144,22 +184,69 @@ class HybridVectorRetriever:
                 "num_raw_results": len(processed_results),
                 "avg_similarity": (
                     np.mean([r["similarity"] for r in final_results])
-                    if final_results
-                    else 0
+                    if final_results else 0
                 ),
                 "threshold_applied": self.base_threshold,
                 "cache_hit": False,
             }
 
             # 9. 更新缓存
-            result = (context_str, final_results, metadata)
-            self._update_cache(cache_key, result, start_time)
+            if self.cache_enabled:
+                self._update_cache(cache_key, context_str, final_results, metadata)
 
-            return result
+            return context_str, final_results, metadata
 
         except Exception as e:
             print(f"⚠️ [HybridRetriever] 检索失败: {e}")
-            return (f"检索服务暂时不可用: {str(e)}", [], {})
+            return f"检索服务暂时不可用: {str(e)}", [], {}
+
+    def retrieve_with_details(
+        self,
+        query: str,
+        top_k: Optional[int] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        详细搜索接口
+
+        实现 BaseRetriever 的抽象方法
+
+        Args:
+            query: 查询文本
+            top_k: 返回结果数量
+            **kwargs: 其他参数
+
+        Returns:
+            包含完整信息的字典
+        """
+        context_str, results, metadata = self.retrieve(query, top_k, **kwargs)
+
+        # 提取关键信息
+        sources = []
+        for i, hit in enumerate(results):
+            entity = hit.get("entity", {})
+            meta = entity.get("metadata", {})
+
+            sources.append({
+                "rank": i + 1,
+                "similarity": hit.get("similarity", 0),
+                "department": entity.get("department", "未知部门"),
+                "title": meta.get("title", "无标题"),
+                "time": meta.get("time", "未知时间"),
+                "composite_score": hit.get("composite_score", 0),
+                "features": hit.get("rerank_features", {}),
+            })
+
+        return {
+            "query": query,
+            "context": context_str,
+            "sources": sources,
+            "metadata": metadata,
+            "num_sources": len(sources),
+            "confidence": self.calculate_confidence(results),
+        }
+
+    # ==================== 内部方法 ====================
 
     def _hybrid_threshold_filter(self, results: List[Dict], query: str) -> List[Dict]:
         """
@@ -188,23 +275,18 @@ class HybridVectorRetriever:
                 adaptive_threshold = max(base_threshold * 0.8, mean_sim - 0.1)
                 adaptive_threshold = max(0.3, adaptive_threshold)  # 保底阈值
 
-                print(
-                    f"📊 阈值动态调整: {base_threshold:.3f} → {adaptive_threshold:.3f}"
-                )
+                print(f"📊 阈值动态调整: {base_threshold:.3f} → {adaptive_threshold:.3f}")
                 filtered = [r for r in results if r["similarity"] >= adaptive_threshold]
 
         # 步骤4：保底机制
         if len(filtered) < self.min_results:
             # 返回相似度最高的前几个结果，但标记为低置信度
-            sorted_results = sorted(
-                results, key=lambda x: x["similarity"], reverse=True
-            )
-            filtered = sorted_results[: self.min_results]
+            sorted_results = sorted(results, key=lambda x: x["similarity"], reverse=True)
+            filtered = sorted_results[:self.min_results]
             for r in filtered:
                 r["low_confidence"] = True
 
-        # TODO: 暂时不考虑过滤
-        # return filtered
+        # TODO: 暂时不考虑过滤，返回所有结果
         return results
 
     def _hybrid_rerank(self, query: str, results: List[Dict]) -> List[Dict]:
@@ -237,7 +319,7 @@ class HybridVectorRetriever:
             authority = self.dept_authority.get(dept, self.dept_authority["default"])
             features["authority"].append(authority)
 
-            # TODO: 4. 内容长度特征. 需要进一步优化
+            # 4. 内容长度特征
             text_len = len(hit["entity"].get("text", ""))
             length_score = min(1.0, text_len / 1500)  # 1500字为理想长度
             features["length"].append(length_score)
@@ -258,8 +340,7 @@ class HybridVectorRetriever:
                 key: norm_features[key][i] for key in self.rerank_weights.keys()
             }
 
-        # TODO: 按综合评分重排 (暂时不考虑重排)
-        # return sorted(results, key=lambda x: x["composite_score"], reverse=True)
+        # TODO: 暂时不考虑重排，返回原顺序
         return results
 
     def _calculate_recency(self, time_str: str, current_time: datetime) -> float:
@@ -311,132 +392,57 @@ class HybridVectorRetriever:
 
         return [(v - min_val) / (max_val - min_val) for v in values]
 
-    def _build_context(self, query: str, results: List[Dict]) -> str:
-        """构建RAG上下文"""
-        if not results:
-            return "未找到相关案例。"
+    # ==================== 静态工厂方法 ====================
 
-        context_parts = [f"用户查询：{query}", f"检索到 {len(results)} 个相关案例：\n"]
-
-        for i, hit in enumerate(results):
-            similarity = hit["similarity"]
-            confidence = (
-                "高" if similarity > 0.7 else ("中" if similarity > 0.5 else "低")
-            )
-
-            # 如果有重排评分，显示综合评分
-            if "composite_score" in hit:
-                composite_score = hit["composite_score"]
-                score_info = f"(相似度: {similarity:.1%}, 综合评分: {composite_score:.3f}, 置信度: {confidence})"
-            else:
-                score_info = f"(相似度: {similarity:.1%}, 置信度: {confidence})"
-
-            # 直接使用已构建的RAG上下文
-            rag_text = hit["entity"].get("text", "")
-
-            context_parts.append(f"\n--- 案例 {i+1} {score_info} ---")
-            context_parts.append(rag_text)
-
-        # 添加回答指导
-        context_parts.append("\n--- 回答指导 ---")
-        context_parts.append("请基于以上案例信息，准确、专业地回应用户查询。")
-        context_parts.append("如果案例与查询不完全匹配，请说明差异并提供最相关的信息。")
-        context_parts.append("引用具体案例时，请注明来源部门和时间。")
-
-        return "\n".join(context_parts)
-
-    def _update_cache(self, cache_key: str, result: Tuple, timestamp: datetime):
-        """更新缓存"""
-        context_str, results, metadata = result
-
-        # 只缓存成功的查询
-        if results:
-            self.cache[cache_key] = {
-                "context": context_str,
-                "results": results,
-                "metadata": {**metadata, "cache_hit": True},
-                "timestamp": timestamp,
-            }
-
-            # 限制缓存大小
-            if len(self.cache) > 100:
-                # 删除最旧的缓存项
-                oldest_key = next(iter(self.cache))
-                del self.cache[oldest_key]
-
-    def search_with_details(self, query: str, top_k: int = 5) -> Dict[str, Any]:
+    @classmethod
+    def from_config(cls, config: Dict[str, Any]) -> "HybridVectorRetriever":
         """
-        详细搜索接口（包含元数据）
+        从配置创建实例
 
-        参数:
-            query: 查询文本
-            top_k: 返回结果数量
+        Args:
+            config: 配置字典
 
-        返回:
-            包含完整信息的字典
+        Returns:
+            HybridVectorRetriever 实例
         """
-        context_str, results, metadata = self.retrieve(query, top_k)
+        return cls(config=config)
 
-        # 提取关键信息
-        sources = []
-        for i, hit in enumerate(results):
-            entity = hit["entity"]
-            meta = entity.get("metadata", {})
+    @classmethod
+    def from_settings(cls) -> "HybridVectorRetriever":
+        """
+        从项目配置创建实例
 
-            sources.append(
-                {
-                    "rank": i + 1,
-                    "similarity": hit["similarity"],
-                    "department": entity.get("department", "未知部门"),
-                    "title": meta.get("title", "无标题"),
-                    "time": meta.get("time", "未知时间"),
-                    "composite_score": hit.get("composite_score", 0),
-                }
-            )
-
-        return {
-            "query": query,
-            "context": context_str,
-            "sources": sources,
-            "metadata": metadata,
-            "num_sources": len(sources),
-            "confidence": self._calculate_confidence(results),
-        }
-
-    def _calculate_confidence(self, results: List[Dict]) -> float:
-        """计算检索置信度"""
-        if not results:
-            return 0.0
-
-        # 基于相似度和数量计算置信度
-        similarities = [r["similarity"] for r in results]
-        avg_similarity = np.mean(similarities)
-
-        # 数量因子：结果越多，置信度越高（但边际递减）
-        num_factor = 1 - 0.5 ** len(results)
-
-        # 综合置信度
-        confidence = avg_similarity * num_factor
-        return min(1.0, confidence)
-
-    # TODO: 缓存管理接口
-    def clear_cache(self):
-        """清空缓存"""
-        self.cache.clear()
-        print("🧹 缓存已清空")
+        Returns:
+            HybridVectorRetriever 实例
+        """
+        return cls()
 
 
-# 工具函数
-def retrieve_with_details(query: str, top_k: int = 5) -> Dict[str, Any]:
+# ==================== 工具函数 ====================
+
+def retrieve_with_details(
+    query: str,
+    top_k: int = 5
+) -> Dict[str, Any]:
     """
-    获取RAG上下文及详细信息
+    快捷函数：获取RAG上下文及详细信息
+
+    Args:
+        query: 查询文本
+        top_k: 返回结果数量
+
+    Returns:
+        包含详细信息的字典
     """
     retriever = HybridVectorRetriever()
-    return retriever.search_with_details(query, top_k)
+    return retriever.retrieve_with_details(query, top_k)
 
 
 def get_retriever_instance() -> HybridVectorRetriever:
     """
     获取检索器单例实例
+
+    Returns:
+        HybridVectorRetriever 单例
     """
     return HybridVectorRetriever()
