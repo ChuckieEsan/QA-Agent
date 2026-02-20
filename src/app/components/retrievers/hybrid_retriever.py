@@ -278,26 +278,17 @@ class HybridVectorRetriever(BaseRetriever):
                 print(f"📊 阈值动态调整: {base_threshold:.3f} → {adaptive_threshold:.3f}")
                 filtered = [r for r in results if r["similarity"] >= adaptive_threshold]
 
-        # 步骤4：保底机制
-        if len(filtered) < self.min_results:
-            # 返回相似度最高的前几个结果，但标记为低置信度
-            sorted_results = sorted(results, key=lambda x: x["similarity"], reverse=True)
-            filtered = sorted_results[:self.min_results]
-            for r in filtered:
-                r["low_confidence"] = True
-
-        # TODO: 暂时不考虑过滤，返回所有结果
-        return results
+        # 返回筛选后的结果
+        return filtered if len(filtered) > 0 else results
 
     def _hybrid_rerank(self, query: str, results: List[Dict]) -> List[Dict]:
         """
         混合重排策略
 
-        基于多个特征综合评分：
-        1. 向量相似度
-        2. 时效性
-        3. 部门权威性
-        4. 内容质量
+        基于多个特征综合评分（移除部门权威性，所有部门信息平等对待）：
+        1. 向量相似度 (60%)
+        2. 时效性 (30%)
+        3. 内容长度 (10%)
         """
         if len(results) <= 1:
             return results
@@ -314,10 +305,10 @@ class HybridVectorRetriever(BaseRetriever):
             recency = self._calculate_recency(time_str, current_time)
             features["recency"].append(recency)
 
-            # 3. 部门权威性特征
-            dept = hit["entity"].get("department", "")
-            authority = self.dept_authority.get(dept, self.dept_authority["default"])
-            features["authority"].append(authority)
+            # 3. 部门权威性特征（已移除，设为0）
+            # 政务数据特点：所有政府部门发布的信息都具有权威性
+            # 公平性原则：所有部门的政策和回复都应该平等对待
+            features["authority"].append(0.0)
 
             # 4. 内容长度特征
             text_len = len(hit["entity"].get("text", ""))
@@ -340,7 +331,8 @@ class HybridVectorRetriever(BaseRetriever):
                 key: norm_features[key][i] for key in self.rerank_weights.keys()
             }
 
-        # TODO: 暂时不考虑重排，返回原顺序
+        # 按综合评分降序排序
+        results.sort(key=lambda x: x["composite_score"], reverse=True)
         return results
 
     def _calculate_recency(self, time_str: str, current_time: datetime) -> float:

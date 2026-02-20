@@ -158,13 +158,17 @@ class RetrieverConfig(BaseConfig):
     min_results: int = Field(default=3, description="最小返回结果数", ge=1)
     max_results: int = Field(default=10, description="最大返回结果数", ge=1)
 
-    # 重排权重配置
+    # 重排权重配置（移除部门权威性，所有部门信息平等对待）
+    # 权重说明：
+    # - 相似度 (60%): 向量相似度是最重要的指标
+    # - 时效性 (30%): 优先展示近期政策和回复
+    # - 内容长度 (10%): 适度偏好内容更丰富的案例
     weight_similarity: float = Field(
-        default=0.8, description="相似度权重", ge=0.0, le=1.0
+        default=0.6, description="相似度权重", ge=0.0, le=1.0
     )
-    weight_recency: float = Field(default=0.7, description="时效性权重", ge=0.0, le=1.0)
+    weight_recency: float = Field(default=0.3, description="时效性权重", ge=0.0, le=1.0)
     weight_authority: float = Field(
-        default=0.2, description="部门权威性权重", ge=0.0, le=1.0
+        default=0.0, description="部门权威性权重（已移除）", ge=0.0, le=1.0
     )
     weight_length: float = Field(
         default=0.1, description="内容长度权重", ge=0.0, le=1.0
