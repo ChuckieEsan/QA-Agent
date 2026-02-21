@@ -9,50 +9,57 @@ from src.app.components.retrievers.hybrid_retriever import HybridVectorRetriever
 class TestHybridVectorRetriever:
     """测试混合检索器"""
 
-    def test_retrieve_with_details_basic(self, sample_query):
+    def test_retrieve_basic(self, sample_query):
         """测试基本检索功能"""
-        result = HybridVectorRetriever().retrieve_with_details(sample_query, top_k=5)
+        context, results, metadata = HybridVectorRetriever().retrieve(sample_query, top_k=5)
 
         # 检查返回结构
-        assert "query" in result
-        assert "context" in result
-        assert "sources" in result
-        assert "metadata" in result
+        assert isinstance(context, str)
+        assert isinstance(results, list)
+        assert isinstance(metadata, dict)
 
-        # 检查结果数量
-        assert result["num_sources"] > 0
-        assert len(result["sources"]) <= 5
+        # 检查结果数量（可能为0，取决于数据库状态）
+        assert len(results) <= 5
 
-    def test_retrieve_with_details_similarity(self):
+        # 检查 metadata 中的 sources
+        assert "sources" in metadata
+        assert len(metadata["sources"]) == len(results)
+
+        # 检查 metadata 的必要字段
+        assert "query" in metadata
+        assert "num_results" in metadata
+        assert "avg_similarity" in metadata
+
+    def test_retrieve_similarity(self):
         """测试相似度阈值"""
-        result = HybridVectorRetriever().retrieve_with_details("雨露计划补贴标准", top_k=10)
+        context, results, metadata = HybridVectorRetriever().retrieve("雨露计划补贴标准", top_k=10)
 
         # 检查平均相似度
-        assert result["metadata"]["avg_similarity"] > 0.5
+        assert metadata["avg_similarity"] > 0.5
 
         # 检查每个结果的相似度
-        for source in result["sources"]:
-            assert source["similarity"] >= result["metadata"]["threshold_applied"]
+        for result in results:
+            assert result["similarity"] >= metadata["threshold_applied"]
 
-    def test_retrieve_with_details_metadata(self):
+    def test_retrieve_metadata(self):
         """测试元数据完整性"""
-        result = HybridVectorRetriever().retrieve_with_details("公积金提取", top_k=3)
+        context, results, metadata = HybridVectorRetriever().retrieve("公积金提取", top_k=3)
 
         # 检查元数据字段
-        assert "query" in result["metadata"]
-        assert "retrieval_time" in result["metadata"]
-        assert "num_results" in result["metadata"]
-        assert "avg_similarity" in result["metadata"]
-        assert "threshold_applied" in result["metadata"]
+        assert "query" in metadata
+        assert "retrieval_time" in metadata
+        assert "num_results" in metadata
+        assert "avg_similarity" in metadata
+        assert "threshold_applied" in metadata
 
-    def test_get_retriever_instance_singleton(self):
+    def test_singleton(self):
         """测试单例模式"""
         retriever1 = HybridVectorRetriever()
         retriever2 = HybridVectorRetriever()
         assert retriever1 is retriever2
 
-    def test_retriever_custom_config(self):
-        """测试自定义配置（统一使用 min_similarity 命名）"""
+    def test_custom_config(self):
+        """测试自定义配置"""
         # 重置单例状态
         HybridVectorRetriever._instance = None
         HybridVectorRetriever._is_initialized = False
@@ -69,22 +76,25 @@ class TestHybridVectorRetriever:
         assert retriever.cache_enabled == False
         assert retriever.min_similarity == 0.6
 
-    def test_retrieve_with_details_confidence(self):
+    def test_retrieve_confidence(self):
         """测试置信度计算"""
-        result = HybridVectorRetriever().retrieve_with_details("创业补贴政策", top_k=5)
+        context, results, metadata = HybridVectorRetriever().retrieve("创业补贴政策", top_k=5)
+
+        # 从 results 计算置信度
+        retriever = HybridVectorRetriever()
+        confidence = retriever.calculate_confidence(results)
 
         # 检查置信度字段
-        assert "confidence" in result
-        assert 0.0 <= result["confidence"] <= 1.0
+        assert 0.0 <= confidence <= 1.0
 
     def test_sources_composite_score(self):
         """测试综合评分"""
-        result = HybridVectorRetriever().retrieve_with_details("医保报销流程", top_k=5)
+        context, results, metadata = HybridVectorRetriever().retrieve("医保报销流程", top_k=5)
 
         # 检查综合评分字段
-        for source in result["sources"]:
-            assert "composite_score" in source
-            assert 0.0 <= source["composite_score"] <= 1.0
+        for result in results:
+            assert "composite_score" in result
+            assert 0.0 <= result["composite_score"] <= 1.0
 
     def test_threshold_filtering(self):
         """测试阈值过滤功能"""
@@ -105,7 +115,7 @@ class TestHybridVectorRetriever:
 
         # 使用模糊查询触发动态调整
         context, results, metadata = retriever.retrieve(
-            "一些不明确的查询词语",
+            "最近噪音实在是太大了",
             top_k=5
         )
 
@@ -120,5 +130,5 @@ class TestHybridVectorRetrieverIntegration:
     @pytest.mark.skip(reason="需要真实数据库连接")
     def test_real_retrieval(self, sample_query):
         """测试真实检索"""
-        result = HybridVectorRetriever().retrieve_with_details(sample_query, top_k=5)
-        assert result["num_sources"] > 0
+        context, results, metadata = HybridVectorRetriever().retrieve(sample_query, top_k=5)
+        assert len(results) > 0

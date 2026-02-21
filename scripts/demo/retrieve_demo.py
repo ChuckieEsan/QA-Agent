@@ -10,7 +10,7 @@ sys.path.append(os.getcwd())
 from src.config.setting import settings
 
 MODEL_PATH = str(settings.models.embedding_model_path)
-DB_PATH = str(settings.paths.milvus_db_path)
+DB_PATH = str(settings.vectordb.db_path)
 COLLECTION_NAME = settings.vectordb.collection_name
 print(f"✅ 从 Config 加载配置")
 

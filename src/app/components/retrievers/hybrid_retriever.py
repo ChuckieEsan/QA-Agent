@@ -86,11 +86,9 @@ class HybridVectorRetriever(BaseRetriever):
         self.max_results = settings.retriever.max_results
 
         # 4. 重排权重配置
-        # 注意：部门权威性已被移除，权重设为 0.0，但保留键以兼容代码
         self.rerank_weights = {
             "similarity": settings.retriever.weight_similarity,
             "recency": settings.retriever.weight_recency,
-            "authority": 0.0,  # 已移除部门权威性，权重为0
             "length": settings.retriever.weight_length,
         }
 
@@ -115,6 +113,20 @@ class HybridVectorRetriever(BaseRetriever):
 
         Returns:
             (context_str, results, metadata)
+            - context_str: 拼接的上下文文本
+            - results: 详细的结果列表，每个结果包含：
+              {
+                  "entity": Dict,              # Milvus 实体
+                  "distance": float,            # 距离
+                  "similarity": float,          # 相似度
+                  "title": str,                 # 标题
+                  "department": str,            # 部门
+                  "time": str,                  # 时间
+                  "content": str,               # 内容
+                  "composite_score": float,     # 综合评分（重排后）
+                  "rerank_features": Dict       # 重排特征（可选）
+              }
+            - metadata: 元数据字典
         """
         start_time = datetime.now()
 
@@ -145,7 +157,19 @@ class HybridVectorRetriever(BaseRetriever):
             )
 
             if not raw_results or not raw_results[0]:
-                result = ("未在知识库中找到相关信息。", [], {})
+                result = (
+                    "未在知识库中找到相关信息。",
+                    [],
+                    {
+                        "query": query,
+                        "num_results": 0,
+                        "num_raw_results": 0,
+                        "avg_similarity": 0.0,
+                        "threshold_applied": self.min_similarity,
+                        "cache_hit": False,
+                        "sources": []
+                    }
+                )
                 if self.cache_enabled:
                     self._update_cache(cache_key, *result)
                 return result
@@ -154,10 +178,18 @@ class HybridVectorRetriever(BaseRetriever):
             processed_results = []
             for hit in raw_results[0]:
                 # Milvus 2.x 中，distance 对应余弦相似度
+                entity = hit.get("entity", hit)
+                metadata = entity.get("metadata", {})
+
                 processed_hit = {
-                    "entity": hit.get("entity", hit),
+                    "entity": entity,
                     "distance": 1 - hit.get("distance", 0),
                     "similarity": hit.get("distance", 0),
+                    # 直接提取常用字段，方便上层使用
+                    "title": metadata.get("title", "无标题"),
+                    "department": entity.get("department", "未知部门"),
+                    "time": metadata.get("time", "未知时间"),
+                    "content": entity.get("text", ""),
                 }
                 processed_results.append(processed_hit)
 
@@ -185,6 +217,18 @@ class HybridVectorRetriever(BaseRetriever):
                 ),
                 "threshold_applied": self.min_similarity,
                 "cache_hit": False,
+                # 添加详细来源信息
+                "sources": [
+                    {
+                        "rank": i + 1,
+                        "title": r.get("title", "无标题"),
+                        "department": r.get("department", "未知部门"),
+                        "time": r.get("time", "未知时间"),
+                        "similarity": r.get("similarity", 0),
+                        "composite_score": r.get("composite_score", 0),
+                    }
+                    for i, r in enumerate(final_results)
+                ],
             }
 
             # 9. 更新缓存
@@ -194,54 +238,19 @@ class HybridVectorRetriever(BaseRetriever):
             return context_str, final_results, metadata
 
         except Exception as e:
+            import traceback
             print(f"⚠️ [HybridRetriever] 检索失败: {e}")
-            return f"检索服务暂时不可用: {str(e)}", [], {}
-
-    def retrieve_with_details(
-        self,
-        query: str,
-        top_k: Optional[int] = None,
-        **kwargs
-    ) -> Dict[str, Any]:
-        """
-        详细搜索接口
-
-        实现 BaseRetriever 的抽象方法
-
-        Args:
-            query: 查询文本
-            top_k: 返回结果数量
-            **kwargs: 其他参数
-
-        Returns:
-            包含完整信息的字典
-        """
-        context_str, results, metadata = self.retrieve(query, top_k, **kwargs)
-
-        # 提取关键信息
-        sources = []
-        for i, hit in enumerate(results):
-            entity = hit.get("entity", {})
-            meta = entity.get("metadata", {})
-
-            sources.append({
-                "rank": i + 1,
-                "similarity": hit.get("similarity", 0),
-                "department": entity.get("department", "未知部门"),
-                "title": meta.get("title", "无标题"),
-                "time": meta.get("time", "未知时间"),
-                "composite_score": hit.get("composite_score", 0),
-                "features": hit.get("rerank_features", {}),
-            })
-
-        return {
-            "query": query,
-            "context": context_str,
-            "sources": sources,
-            "metadata": metadata,
-            "num_sources": len(sources),
-            "confidence": self.calculate_confidence(results),
-        }
+            print(traceback.format_exc())
+            # 返回包含必要字段的 metadata
+            return f"检索服务暂时不可用: {str(e)}", [], {
+                "query": query,
+                "error": str(e),
+                "num_results": 0,
+                "avg_similarity": 0.0,
+                "threshold_applied": self.min_similarity,
+                "cache_hit": False,
+                "sources": []
+            }
 
     # ==================== 内部方法 ====================
 
@@ -302,14 +311,10 @@ class HybridVectorRetriever(BaseRetriever):
             recency = self._calculate_recency(time_str, current_time)
             features["recency"].append(recency)
 
-            # 3. 部门权威性特征（已移除，设为0）
-            # 政务数据特点：所有政府部门发布的信息都具有权威性
-            # 公平性原则：所有部门的政策和回复都应该平等对待
-            features["authority"].append(0.0)
-
-            # 4. 内容长度特征
+            # 3. 内容长度特征
             text_len = len(hit["entity"].get("text", ""))
-            length_score = min(1.0, text_len / 1500)  # 1500字为理想长度
+            length_score = min(1.0, text_len / 1500)
+            # TODO: 内容长度这里需要调整
             features["length"].append(length_score)
 
         # 归一化特征

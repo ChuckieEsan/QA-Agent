@@ -75,37 +75,23 @@ class BaseRetriever(ABC):
         Returns:
             Tuple 包含：
                 - context_str: RAG上下文字符串
-                - results: 检索结果列表
-                - metadata: 元数据（包含检索时间、数量等信息）
+                - results: 检索结果列表，每个结果包含：
+                  {
+                      "entity": Dict,              # Milvus 实体
+                      "distance": float,            # 距离
+                      "similarity": float,          # 相似度
+                      "title": str,                 # 标题（可选）
+                      "department": str,            # 部门（可选）
+                      "time": str,                  # 时间（可选）
+                      "content": str,               # 内容（可选）
+                      "composite_score": float,     # 综合评分（可选）
+                      "rerank_features": Dict       # 重排特征（可选）
+                  }
+                - metadata: 元数据（包含检索时间、数量等信息，包含 "sources" 字段）
 
         Example:
             >>> context, results, metadata = retriever.retrieve("查询文本", top_k=5)
             >>> print(f"检索到 {len(results)} 个结果")
-        """
-        pass
-
-    @abstractmethod
-    def retrieve_with_details(
-        self,
-        query: str,
-        top_k: Optional[int] = None,
-        **kwargs
-    ) -> Dict[str, Any]:
-        """
-        执行详细检索，返回结构化的完整信息
-
-        Args:
-            query: 查询文本
-            top_k: 返回结果数量
-            **kwargs: 其他检索参数
-
-        Returns:
-            Dict 包含：
-                - query: 原始查询
-                - context: RAG上下文
-                - sources: 来源列表（包含相似度、部门等信息）
-                - metadata: 元数据
-                - confidence: 置信度分数
         """
         pass
 
