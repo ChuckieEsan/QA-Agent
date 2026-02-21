@@ -3,10 +3,13 @@
 基于 LLM 的问政请求分类实现
 """
 
+import json
+import traceback
 from typing import Dict, List
 from src.app.components.classifier.base_classifier import BaseClassifier, GovRequestType
-from src.app.infra.llm.llm_service import LLMService, get_llm_service
+from src.app.infra.llm.multi_model_service import get_light_llm_service, LLMService
 from src.app.infra.utils.logger import get_logger
+from dashscope import Generation
 
 logger = get_logger(__name__)
 
@@ -15,7 +18,7 @@ class GovClassifier(BaseClassifier):
     """
     政务问政分类器
 
-    使用 LLM 对市民诉求进行分类
+    使用轻量级 LLM 对市民诉求进行分类（优化 token 消耗）
     """
 
     _instance = None
@@ -29,9 +32,10 @@ class GovClassifier(BaseClassifier):
         if getattr(self, "_initialized", False):
             return
 
-        self.llm_service: LLMService = get_llm_service()
+        # 使用轻量模型进行分类（降低成本）
+        self.llm_service: LLMService = get_light_llm_service()
         self._initialized = True
-        logger.info("✅ Gov Classifier 初始化完成")
+        logger.info(f"✅ Gov Classifier 初始化完成（使用轻量模型: {self.llm_service.get_model_name()}）")
 
     async def classify_gov_request(self, text: str, **kwargs) -> Dict[str, any]:
         """
@@ -81,33 +85,41 @@ class GovClassifier(BaseClassifier):
         }}
         """
 
-        # 调用 LLM 进行分类
-        result = await self.llm_service.generate_response(
-            query="",
-            context=classification_prompt,
-            history=None,
-            stream=False
-        )
-
+        # 使用轻量模型进行分类（降低成本，提高速度）
         try:
-            import json
-            classification = json.loads(result["answer"])
+            response = Generation.call(
+                model=self.llm_service.get_model_name(),
+                prompt=classification_prompt,
+                temperature=self.llm_service.get_config().temperature,
+                max_tokens=self.llm_service.get_config().max_tokens,
+                top_p=self.llm_service.get_config().top_p,
+                result_format='text'  # 注意：使用 text 格式
+            )
 
-            # 验证类型
-            if classification["type"] not in ["advice", "complaint", "help", "consult"]:
-                classification["type"] = "consult"
-                classification["confidence"] = 0.5
-                classification["reasoning"] = "类型识别失败，默认为咨询"
+            if response.status_code == 200:
+                # 注意：result_format='text' 时，结果在 output.text 而不是 choices
+                classification_str = response.output.text
+                classification = json.loads(classification_str)
 
-            return classification
+                # 验证类型
+                if classification["type"] not in ["advice", "complaint", "help", "consult"]:
+                    classification["type"] = "consult"
+                    classification["confidence"] = 0.5
+                    classification["reasoning"] = "类型识别失败，默认为咨询"
+
+                return classification
+            else:
+                raise Exception(f"API调用失败: {response.code} - {response.message}")
+
         except Exception as e:
             # 默认分类为咨询
             logger.warning(f"⚠️  分类失败: {e}，使用默认分类")
+            logger.warning(traceback.format_exc())
             return {
                 "type": "consult",
                 "confidence": 0.5,
                 "keywords": [],
-                "reasoning": "无法准确分类，默认为咨询"
+                "reasoning": f"无法准确分类，错误: {str(e)}"
             }
 
     async def classify_batch(self, texts: List[str], **kwargs) -> List[Dict[str, any]]:

@@ -89,16 +89,27 @@ class MilvusDBConfig(BaseConfig):
 
 
 class LLMConfig(BaseConfig):
-    """大语言模型配置"""
+    """大语言模型配置
+
+    支持分层模型架构：
+    - 主模型（heavy_model）：生成复杂回答，使用高性能模型（qwen-max）
+    - 轻量模型（light_model）：分类/校验等简单任务，使用轻量模型（qwen-turbo/plus）
+    - 优化模型（optimizer_model）：Prompt优化/重写（可选，与轻量模型共用）
+    """
 
     provider: str = Field(
         default="qwen", description="LLM提供商 (qwen/openai/azure/ollama)"
     )
-    model_name: str = Field(default="qwen-max", description="模型名称")
     api_key: str = Field(default="", description="API密钥")
     api_base: str = Field(default="https://dashscope.aliyuncs.com/compatible-mode/v1", description="API基础URL")
 
-    # 生成参数
+    # 主模型配置 - 用于生成复杂回答
+    heavy_model_name: str = Field(default="qwen-max", description="主模型名称（生成回答）")
+
+    # 轻量模型配置 - 用于分类、校验等简单任务
+    light_model_name: str = Field(default="qwen-plus", description="轻量模型名称（分类/校验）")
+
+    # 生成参数（主模型）
     temperature: float = Field(default=0.1, description="温度参数", ge=0.0, le=2.0)
     max_tokens: int = Field(default=2000, description="最大生成token数")
     top_p: float = Field(default=0.9, description="Top-p采样参数")
