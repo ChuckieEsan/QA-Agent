@@ -49,7 +49,7 @@ class HybridVectorRetriever(BaseRetriever):
             "cache_enabled": settings.retriever.enable_cache,
             "cache_ttl": settings.retriever.cache_ttl_minutes * 60,
             "max_cache_size": settings.retriever.cache_max_size,
-            "min_similarity": settings.retriever.base_threshold,
+            "min_similarity": settings.retriever.min_similarity,
         }
 
         if config:
@@ -82,20 +82,17 @@ class HybridVectorRetriever(BaseRetriever):
         self.collection_name = settings.vectordb.collection_name
 
         # 3. 混合策略配置
-        self.base_threshold = settings.retriever.base_threshold
         self.min_results = settings.retriever.min_results
         self.max_results = settings.retriever.max_results
 
         # 4. 重排权重配置
+        # 注意：部门权威性已被移除，权重设为 0.0，但保留键以兼容代码
         self.rerank_weights = {
             "similarity": settings.retriever.weight_similarity,
             "recency": settings.retriever.weight_recency,
-            "authority": settings.retriever.weight_authority,
+            "authority": 0.0,  # 已移除部门权威性，权重为0
             "length": settings.retriever.weight_length,
         }
-
-        # 5. 部门权威性映射
-        self.dept_authority = settings.retriever.department_authority
 
         # 6. 时间衰减权重
         self.recency_weights = settings.retriever.recency_weights
@@ -186,7 +183,7 @@ class HybridVectorRetriever(BaseRetriever):
                     np.mean([r["similarity"] for r in final_results])
                     if final_results else 0
                 ),
-                "threshold_applied": self.base_threshold,
+                "threshold_applied": self.min_similarity,
                 "cache_hit": False,
             }
 
@@ -261,8 +258,8 @@ class HybridVectorRetriever(BaseRetriever):
             return []
 
         # 步骤1：基础阈值筛选
-        base_threshold = self.base_threshold
-        filtered = [r for r in results if r["similarity"] >= base_threshold]
+        threshold = self.min_similarity
+        filtered = [r for r in results if r["similarity"] >= threshold]
 
         # 步骤2：分析结果分布
         similarities = [r["similarity"] for r in results[:10]]  # 只看前10个
@@ -270,12 +267,12 @@ class HybridVectorRetriever(BaseRetriever):
 
         # 步骤3：动态调整
         if len(filtered) < self.min_results:
-            if mean_sim < base_threshold:
+            if mean_sim < threshold:
                 # 如果整体相似度较低，适当降低阈值
-                adaptive_threshold = max(base_threshold * 0.8, mean_sim - 0.1)
+                adaptive_threshold = max(threshold * 0.8, mean_sim - 0.1)
                 adaptive_threshold = max(0.3, adaptive_threshold)  # 保底阈值
 
-                print(f"📊 阈值动态调整: {base_threshold:.3f} → {adaptive_threshold:.3f}")
+                print(f"📊 阈值动态调整: {threshold:.3f} → {adaptive_threshold:.3f}")
                 filtered = [r for r in results if r["similarity"] >= adaptive_threshold]
 
         # 返回筛选后的结果

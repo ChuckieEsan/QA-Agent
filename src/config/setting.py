@@ -60,10 +60,10 @@ class ModelConfig(BaseConfig):
 
     # 重排模型
     reranker_model: Optional[str] = Field(
-        default=None, description="重排模型名称（可选）"
+        default=None, description="重排模型名称"
     )
     reranker_model_path: Optional[Path] = Field(
-        default=None, description="重排模型本地路径（可选）"
+        default=None, description="重排模型本地路径"
     )
 
 
@@ -152,8 +152,8 @@ class RetrieverConfig(BaseConfig):
     threshold_strategy: str = Field(
         default="hybrid", description="阈值策略 (hybrid/fixed/dynamic/top_percentage)"
     )
-    base_threshold: float = Field(
-        default=0.65, description="基础相似度阈值", ge=0.0, le=1.0
+    min_similarity: float = Field(
+        default=0.65, description="最小相似度阈值", ge=0.0, le=1.0
     )
     min_results: int = Field(default=3, description="最小返回结果数", ge=1)
     max_results: int = Field(default=10, description="最大返回结果数", ge=1)
@@ -167,16 +167,8 @@ class RetrieverConfig(BaseConfig):
         default=0.6, description="相似度权重", ge=0.0, le=1.0
     )
     weight_recency: float = Field(default=0.3, description="时效性权重", ge=0.0, le=1.0)
-    weight_authority: float = Field(
-        default=0.0, description="部门权威性权重（已移除）", ge=0.0, le=1.0
-    )
     weight_length: float = Field(
         default=0.1, description="内容长度权重", ge=0.0, le=1.0
-    )
-
-    # 部门权威性映射
-    department_authority: Dict[str, float] = Field(
-        default={"default": 0.5}, description="部门权威性分数映射"
     )
 
     # 时间衰减配置
@@ -278,8 +270,7 @@ if __name__ == "__main__":
     # 显示检索器配置
     print("\n🔍 检索器配置:")
     print(f"  阈值策略: {settings.retriever.threshold_strategy}")
-    print(f"  基础阈值: {settings.retriever.base_threshold}")
+    print(f"  最小相似度阈值: {settings.retriever.min_similarity}")
     print(f"  重排权重: S={settings.retriever.weight_similarity}, "
           f"R={settings.retriever.weight_recency}, "
-          f"A={settings.retriever.weight_authority}, "
           f"L={settings.retriever.weight_length}")

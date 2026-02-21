@@ -57,7 +57,11 @@ class TestHybridVectorRetriever:
         assert retriever1 is retriever2
 
     def test_retriever_custom_config(self):
-        """测试自定义配置"""
+        """测试自定义配置（统一使用 min_similarity 命名）"""
+        # 重置单例状态
+        HybridVectorRetriever._instance = None
+        HybridVectorRetriever._is_initialized = False
+
         config = {
             "top_k": 8,
             "cache_enabled": False,
@@ -68,7 +72,7 @@ class TestHybridVectorRetriever:
         # 检查配置生效
         assert retriever.default_top_k == 8
         assert retriever.cache_enabled == False
-        assert retriever.base_threshold == 0.6
+        assert retriever.min_similarity == 0.6
 
     def test_retrieve_with_details_confidence(self):
         """测试置信度计算"""
