@@ -27,11 +27,6 @@ class TestSettings:
         total_weight = (
             settings.retriever.weight_similarity +
             settings.retriever.weight_recency +
-            settings.retriever.weight_authority +
             settings.retriever.weight_length
         )
         assert abs(total_weight - 1.0) < 0.01
-
-    def test_authority_removed(self):
-        """测试部门权威性已移除"""
-        assert settings.retriever.weight_authority == 0.0

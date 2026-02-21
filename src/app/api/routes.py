@@ -134,7 +134,7 @@ async def get_stats():
         from src.app.infra.db.milvus_db import get_milvus_client
 
         client = get_milvus_client()
-        stats = client.get_collection_stats("gov_cases")
+        stats = client.get_collection_stats()  # 不需要参数
 
         return {
             "total_documents": stats.get("row_count", 0),
