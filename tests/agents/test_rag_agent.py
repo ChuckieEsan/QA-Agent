@@ -36,8 +36,8 @@ class TestRagAgent:
         result = await query_agentic_rag(query=sample_query)
 
         classification = result["classification"]
-        assert "category" in classification
-        assert classification["category"] in ["advice", "complaint", "help", "consult"]
+        assert "type" in classification
+        assert classification["type"] in ["advice", "complaint", "help", "consult"]
 
 
 class TestRagAgentInstance:

@@ -405,33 +405,3 @@ class HybridVectorRetriever(BaseRetriever):
             HybridVectorRetriever 实例
         """
         return cls()
-
-
-# ==================== 工具函数 ====================
-
-def retrieve_with_details(
-    query: str,
-    top_k: int = 5
-) -> Dict[str, Any]:
-    """
-    快捷函数：获取RAG上下文及详细信息
-
-    Args:
-        query: 查询文本
-        top_k: 返回结果数量
-
-    Returns:
-        包含详细信息的字典
-    """
-    retriever = HybridVectorRetriever()
-    return retriever.retrieve_with_details(query, top_k)
-
-
-def get_retriever_instance() -> HybridVectorRetriever:
-    """
-    获取检索器单例实例
-
-    Returns:
-        HybridVectorRetriever 单例
-    """
-    return HybridVectorRetriever()

@@ -4,15 +4,9 @@
 """
 
 from src.app.components.retrievers.base_retriever import BaseRetriever
-from src.app.components.retrievers.hybrid_retriever import (
-    HybridVectorRetriever,
-    retrieve_with_details,
-    get_retriever_instance,
-)
+from src.app.components.retrievers.hybrid_retriever import HybridVectorRetriever
 
 __all__ = [
     "BaseRetriever",
     "HybridVectorRetriever",
-    "retrieve_with_details",
-    "get_retriever_instance",
 ]

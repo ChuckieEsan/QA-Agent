@@ -3,11 +3,7 @@
 """
 
 import pytest
-from src.app.components.retrievers.hybrid_retriever import (
-    HybridVectorRetriever,
-    retrieve_with_details,
-    get_retriever_instance
-)
+from src.app.components.retrievers.hybrid_retriever import HybridVectorRetriever
 
 
 class TestHybridVectorRetriever:
@@ -15,7 +11,7 @@ class TestHybridVectorRetriever:
 
     def test_retrieve_with_details_basic(self, sample_query):
         """测试基本检索功能"""
-        result = retrieve_with_details(sample_query, top_k=5)
+        result = HybridVectorRetriever().retrieve_with_details(sample_query, top_k=5)
 
         # 检查返回结构
         assert "query" in result
@@ -29,7 +25,7 @@ class TestHybridVectorRetriever:
 
     def test_retrieve_with_details_similarity(self):
         """测试相似度阈值"""
-        result = retrieve_with_details("雨露计划补贴标准", top_k=10)
+        result = HybridVectorRetriever().retrieve_with_details("雨露计划补贴标准", top_k=10)
 
         # 检查平均相似度
         assert result["metadata"]["avg_similarity"] > 0.5
@@ -40,7 +36,7 @@ class TestHybridVectorRetriever:
 
     def test_retrieve_with_details_metadata(self):
         """测试元数据完整性"""
-        result = retrieve_with_details("公积金提取", top_k=3)
+        result = HybridVectorRetriever().retrieve_with_details("公积金提取", top_k=3)
 
         # 检查元数据字段
         assert "query" in result["metadata"]
@@ -51,9 +47,8 @@ class TestHybridVectorRetriever:
 
     def test_get_retriever_instance_singleton(self):
         """测试单例模式"""
-        retriever1 = get_retriever_instance()
-        retriever2 = get_retriever_instance()
-
+        retriever1 = HybridVectorRetriever()
+        retriever2 = HybridVectorRetriever()
         assert retriever1 is retriever2
 
     def test_retriever_custom_config(self):
@@ -76,7 +71,7 @@ class TestHybridVectorRetriever:
 
     def test_retrieve_with_details_confidence(self):
         """测试置信度计算"""
-        result = retrieve_with_details("创业补贴政策", top_k=5)
+        result = HybridVectorRetriever().retrieve_with_details("创业补贴政策", top_k=5)
 
         # 检查置信度字段
         assert "confidence" in result
@@ -84,7 +79,7 @@ class TestHybridVectorRetriever:
 
     def test_sources_composite_score(self):
         """测试综合评分"""
-        result = retrieve_with_details("医保报销流程", top_k=5)
+        result = HybridVectorRetriever().retrieve_with_details("医保报销流程", top_k=5)
 
         # 检查综合评分字段
         for source in result["sources"]:
@@ -125,5 +120,5 @@ class TestHybridVectorRetrieverIntegration:
     @pytest.mark.skip(reason="需要真实数据库连接")
     def test_real_retrieval(self, sample_query):
         """测试真实检索"""
-        result = retrieve_with_details(sample_query, top_k=5)
+        result = HybridVectorRetriever().retrieve_with_details(sample_query, top_k=5)
         assert result["num_sources"] > 0

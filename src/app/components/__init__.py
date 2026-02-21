@@ -7,8 +7,6 @@ components 模块
 from src.app.components.retrievers import (
     BaseRetriever,
     HybridVectorRetriever,
-    retrieve_with_details,
-    get_retriever_instance,
 )
 
 # 生成器组件
@@ -30,12 +28,16 @@ from src.app.components.memory import (
     ConversationMemory,
 )
 
+# 质量校验组件
+from src.app.components.quality import (
+    BaseValidator,
+    AnswerValidator,
+)
+
 __all__ = [
     # 检索器
     "BaseRetriever",
     "HybridVectorRetriever",
-    "retrieve_with_details",
-    "get_retriever_instance",
 
     # 生成器
     "BaseGenerator",
@@ -49,4 +51,8 @@ __all__ = [
     # 记忆
     "BaseMemory",
     "ConversationMemory",
+
+    # 质量校验
+    "BaseValidator",
+    "AnswerValidator",
 ]

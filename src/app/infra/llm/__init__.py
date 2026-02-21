@@ -1,20 +1,24 @@
 """
-services 模块
-封装外部服务调用
+LLM 基础设施模块
+提供 LLM 相关的服务和工具
 """
 
 from src.app.infra.llm.base_llm_service import BaseLLMService
-from src.app.infra.llm.llm_service import (
-    LLMService,
-    AgentDecision,
+from src.app.infra.llm.multi_model_service import (
+    get_heavy_llm_service,
+    get_light_llm_service,
+    get_optimizer_llm_service,
+    ModelPurpose,
     get_llm_service,
-    generate_agentic_rag_response,
+    LLMService,
 )
 
 __all__ = [
     "BaseLLMService",
-    "LLMService",
-    "AgentDecision",
+    "get_heavy_llm_service",
+    "get_light_llm_service",
+    "get_optimizer_llm_service",
+    "ModelPurpose",
     "get_llm_service",
-    "generate_agentic_rag_response",
+    "LLMService",
 ]
