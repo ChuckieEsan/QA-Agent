@@ -11,7 +11,7 @@ from sentence_transformers import SentenceTransformer
 
 from src.config.setting import settings
 from src.app.infra.utils import get_device
-from src.app.infra.db.milvus_db import get_milvus_client
+from src.app.infra.db.milvus_db import MilvusDBClient
 from .base_retriever import BaseRetriever
 
 
@@ -78,7 +78,7 @@ class HybridVectorRetriever(BaseRetriever):
 
         # 2. 连接向量数据库
         print(f"🔌 连接 Milvus: {settings.vectordb.db_path} ...")
-        self.milvus_client = get_milvus_client()
+        self.milvus_client = MilvusDBClient()
         self.collection_name = settings.vectordb.collection_name
 
         # 3. 混合策略配置

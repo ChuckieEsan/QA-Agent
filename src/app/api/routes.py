@@ -11,6 +11,7 @@ import asyncio
 
 from src import query_agentic_rag
 from src.app.infra.utils.logger import get_logger
+from src.app.infra.db.milvus_db import MilvusDBClient
 
 logger = get_logger(__name__)
 
@@ -20,18 +21,21 @@ router = APIRouter(prefix="/api", tags=["govpulse"])
 
 # ==================== 数据模型 ====================
 
+
 class ChatRequest(BaseModel):
     """聊天请求模型"""
+
     query: str = Field(..., description="用户查询", min_length=1, max_length=1000)
     history: List[Dict[str, str]] = Field(
         default=[],
-        description="对话历史，格式: [{'role': 'user', 'content': '...'}, ...]"
+        description="对话历史，格式: [{'role': 'user', 'content': '...'}, ...]",
     )
     top_k: int = Field(default=5, ge=1, le=20, description="检索结果数量")
 
 
 class SourceItem(BaseModel):
     """检索来源项"""
+
     rank: int = Field(..., description="排名")
     similarity: float = Field(..., description="相似度")
     department: str = Field(..., description="部门名称")
@@ -42,6 +46,7 @@ class SourceItem(BaseModel):
 
 class ChatResponse(BaseModel):
     """聊天响应模型"""
+
     answer: str = Field(..., description="生成的回答")
     classification: Dict[str, Any] = Field(..., description="分类结果")
     sources: List[SourceItem] = Field(..., description="检索来源")
@@ -53,12 +58,14 @@ class ChatResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     """健康检查响应"""
+
     status: str = "ok"
     version: str = "1.0.0"
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
 # ==================== API 路由 ====================
+
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check():
@@ -93,10 +100,7 @@ async def chat(request: ChatRequest):
         logger.info(f"💬 收到聊天请求: {request.query[:30]}...")
 
         # 调用 Agentic RAG
-        result = await query_agentic_rag(
-            query=request.query,
-            history=request.history
-        )
+        result = await query_agentic_rag(query=request.query, history=request.history)
 
         # 构建响应
         response = ChatResponse(
@@ -104,19 +108,19 @@ async def chat(request: ChatRequest):
             classification=result["classification"],
             sources=[
                 SourceItem(
-                    rank=i+1,
+                    rank=i + 1,
                     similarity=source.get("similarity", 0.0),
                     department=source.get("department", "未知部门"),
                     title=source.get("title", "无标题"),
                     time=source.get("time", "未知时间"),
-                    composite_score=source.get("composite_score", 0.0)
+                    composite_score=source.get("composite_score", 0.0),
                 )
                 for i, source in enumerate(result["sources"])
             ],
             quality_score=result["quality_check"].get("overall_score", 0.0),
             retrieval_time=result["metadata"].get("retrieval_time", 0.0),
             steps=1,
-            timestamp=datetime.now().isoformat()
+            timestamp=datetime.now().isoformat(),
         )
 
         logger.info(f"✅ 聊天响应完成，检索到 {len(response.sources)} 个来源")
@@ -131,15 +135,13 @@ async def chat(request: ChatRequest):
 async def get_stats():
     """获取系统统计信息"""
     try:
-        from src.app.infra.db.milvus_db import get_milvus_client
-
-        client = get_milvus_client()
+        client = MilvusDBClient()
         stats = client.get_collection_stats()  # 不需要参数
 
         return {
             "total_documents": stats.get("row_count", 0),
             "collection_name": "gov_cases",
-            "status": "active"
+            "status": "active",
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

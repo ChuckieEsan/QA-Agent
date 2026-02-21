@@ -4,6 +4,7 @@ Milvus 向量数据库客户端实现
 """
 
 from typing import Optional, Dict, List
+import threading
 from pymilvus import MilvusClient
 from src.app.infra.db.base_db import BaseDBClient
 from src.app.infra.utils.logger import get_logger
@@ -14,19 +15,35 @@ logger = get_logger(__name__)
 
 class MilvusDBClient(BaseDBClient):
     """
-    Milvus 数据库客户端
+    Milvus 数据库客户端（单例模式）
     实现 BaseDBClient 接口，提供 Milvus 数据库的连接和操作封装
     """
 
+    _instance: Optional["MilvusDBClient"] = None
+    _lock = threading.Lock()
+
+    def __new__(cls, config: Optional[Dict] = None):
+        """单例模式实现 - 确保只创建一个实例"""
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super(MilvusDBClient, cls).__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+
     def __init__(self, config: Optional[Dict] = None):
         """
-        初始化 Milvus 客户端
+        初始化 Milvus 客户端（单例）
 
         Args:
             config: 可选的配置字典，如果为 None 则使用 settings.vectordb 配置
         """
+        # 防止重复初始化
+        if self._initialized:
+            return
+
         # 使用传入的配置或默认配置
-        config = config or {
+        self.config = config or {
             "db_path": str(settings.vectordb.db_path),
             "collection_name": settings.vectordb.collection_name,
             "vector_dimension": settings.vectordb.vector_dimension,
@@ -34,7 +51,7 @@ class MilvusDBClient(BaseDBClient):
             "enable_dynamic_field": settings.vectordb.enable_dynamic_field,
         }
 
-        super().__init__(config)
+        super().__init__(self.config)
         self.db_path: str = self.config.get("db_path")
         self.collection_name: str = self.config.get("collection_name")
         self.vector_dimension: int = self.config.get("vector_dimension", 1024)
@@ -43,6 +60,12 @@ class MilvusDBClient(BaseDBClient):
 
         # Milvus 客户端实例
         self._client: Optional[MilvusClient] = None
+
+        # 标记为已初始化
+        self._initialized = True
+
+        # 自动连接数据库
+        self.connect()
 
     def connect(self) -> None:
         """
@@ -395,36 +418,29 @@ class MilvusDBClient(BaseDBClient):
     @classmethod
     def from_settings(cls) -> "MilvusDBClient":
         """
-        从项目配置创建 Milvus 客户端实例
+        从项目配置创建/获取 Milvus 客户端单例实例
 
         Returns:
-            MilvusDBClient: 配置好的客户端实例
+            MilvusDBClient: 单例客户端实例
         """
         return cls()
 
 
-# ==================== 单例模式支持 ====================
-
-_milvus_client_instance: Optional[MilvusDBClient] = None
-
+# ==================== 兼容性函数（向后兼容） ====================
 
 def get_milvus_client() -> MilvusDBClient:
     """
-    获取 Milvus 客户端单例实例
+    获取 Milvus 客户端单例实例（向后兼容）
 
     Returns:
         MilvusDBClient: 单例客户端实例
     """
-    global _milvus_client_instance
-    if _milvus_client_instance is None:
-        _milvus_client_instance = MilvusDBClient.from_settings()
-        _milvus_client_instance.connect()
-    return _milvus_client_instance
+    return MilvusDBClient()
 
 
 def get_milvus_client_from_config(config: Dict) -> MilvusDBClient:
     """
-    从自定义配置创建 Milvus 客户端实例
+    从自定义配置创建/获取 Milvus 客户端单例实例
 
     Args:
         config: 配置字典
@@ -432,9 +448,7 @@ def get_milvus_client_from_config(config: Dict) -> MilvusDBClient:
     Returns:
         MilvusDBClient: 配置好的客户端实例
     """
-    client = MilvusDBClient(config)
-    client.connect()
-    return client
+    return MilvusDBClient(config)
 
 
 if __name__ == "__main__":
