@@ -1,12 +1,21 @@
 # GovPulse - 泸州市政务智能问答系统
 
-## 项目概述
+<div align="center">
+
+[![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
+
+**ReAct Agent RAG** 版本
+
+</div>
 
 **GovPulse** 是一个基于检索增强生成（RAG）技术的泸州市政务智能问答系统，旨在为市民提供精准、可靠的政务政策咨询和民生问题解答服务。该系统结合了向量检索、多维度重排、意图分析和大语言模型生成等先进技术，构建了一个端云协同的智能问答解决方案。
 
-**版本**: 0.1.0
-**项目名称**: 泸州市政务智能问答系统 (Agentic RAG)
+**版本**: 0.2.0
+**项目名称**: 泸州市政务智能问答系统 (ReAct Agent RAG)
 **技术栈**: Python 3.13 + PyTorch + Milvus + BGE-M3 + Qwen API
+
+---
 
 ---
 
@@ -18,22 +27,22 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                        应用层 (Application)                        │
 │                    ┌─────────────────────┐                      │
-│                    │    RagAgent         │  ← 主要交互入口        │
+│                    │   ReactAgent        │  ← 纯 ReAct Agent入口  │
 │                    └─────────────────────┘                      │
 └─────────────────────────────────────────────────────────────────┘
                              │
 ┌─────────────────────────────┴─────────────────────────────────────┐
 │                        组件层 (Components)                         │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐ │
-│  │  Retriever  │  │  Generator  │  │ Classifier  │  │   Memory    │ │
+│  │  Retriever  │  │  Generator  │  │ Classifier  │  │ Validator   │ │
 │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
                              │
 ┌─────────────────────────────┴─────────────────────────────────────┐
-│                     基础设施层 (Infrastructure)                    │
+│                    基础设施层 (Infrastructure)                    │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐               │
-│  │     LLM     │  │  Vector DB  │  │   Utils     │               │
-│  │   Service   │  │   (Milvus)  │  │ (Logger...) │               │
+│  │     LLM     │  │  Vector DB  │  │   Tools     │               │
+│  │   Service   │  │   (Milvus)  │  │ (Registry)  │               │
 │  └─────────────┘  └─────────────┘  └─────────────┘               │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -42,43 +51,38 @@
 
 #### ✅ 优点
 
-1. **分层架构清晰** - 采用应用层 → 组件层 → 基础设施层的三层架构，职责分明，便于维护和扩展
+1. **纯 ReAct 范式** - 采用 Thought-Action-Observation 循环，LLM 自主决定推理步骤，更灵活
 
-2. **面向接口编程** - 所有核心模块都定义了抽象基类（BaseRetriever, BaseGenerator, BaseClassifier, BaseMemory, BaseLLMService, BaseDBClient），符合依赖倒置原则，便于单元测试和模块替换
+2. **工具注册表模式** - 使用 `@ToolRegistry.register()` 装饰器模式，便于扩展和管理工具
 
-3. **单一职责原则** - 每个组件职责单一：
+3. **分层架构清晰** - 采用应用层 → 组件层 → 基础设施层的三层架构，职责分明，便于维护和扩展
+
+4. **面向接口编程** - 所有核心模块都定义了抽象基类，符合依赖倒置原则，便于单元测试和模块替换
+
+5. **单一职责原则** - 每个组件职责单一：
    - Retriever: 负责检索
    - Generator: 负责生成回答
    - Classifier: 负责问政类型分类
-   - Memory: 负责对话历史管理
-   - Agent: 负责协调各组件
+   - Validator: 负责回答质量验证
+   - Agent: 负责协调各工具
 
-4. **可扩展性强** - 通过抽象基类，可以轻松添加新的检索策略、生成模型、分类器等
+6. **可扩展性强** - 通过抽象基类和工具注册表，可以轻松添加新的工具或组件
 
-5. **配置集中管理** - 使用 Pydantic 管理配置（Settings 类），支持环境变量覆盖，便于部署
+7. **配置集中管理** - 使用 Pydantic 管理配置（Settings 类），支持环境变量覆盖，便于部署
 
-6. **依赖注入设计** - Agent 构造时可以传入自定义组件实例，支持灵活的组合
-
-7. **单例模式应用** - 对资源密集型组件（如 LLMService, Retriever）使用单例模式，避免重复初始化
+8. **单例模式应用** - 对资源密集型组件（如 LLMService, Retriever）使用单例模式，避免重复初始化
 
 #### ⚠️ 潜在问题与改进建议
 
-1. **混合检索器部分功能未启用** - `HybridVectorRetriever` 中的阈值筛选和重排功能被注释（TODO 标记），需要完善
+1. **API 层待完善** - `src/app/api/` 目录已存在基础路由，可进一步完善文档和认证
 
-2. **缺少API层** - `src/app/api/` 目录为空，如果计划提供Web API，需要补充 FastAPI/Flask 接口
-
-3. **测试覆盖率不足** -
-   - `tests/services/test_retriever.py` 为空
-   - 缺少集成测试
-   - 建议补充：`tests/agents/`, `tests/components/` 等测试目录
+2. **测试覆盖率待提升** - `tests/agents/test_react_agent.py` 已实现，可继续增加边缘 case 测试
 
 ### 1.3 架构建议
 
-1. **完善检索器功能** - 启用混合重排和阈值筛选功能，提升检索质量
-
-2. **补充测试** - 增加集成测试和端到端测试
-
-3. **文档完善** - 补充README和API文档
+1. **启用混合重排** - 检索器已实现阈值筛选和重排功能，可启用以提升检索质量
+2. **完善测试** - 增加集成测试和端到端测试
+3. **API 文档** - 补充FastAPI 自动生成的 Swagger 文档说明
 
 ---
 
@@ -88,21 +92,40 @@
 
 #### 2.1.1 Agent 层 (`src/app/agents/`)
 
-**RagAgent** - 核心协调者
-- 职责：协调检索、分类、生成、记忆四大组件，实现完整RAG流程
-- 输入：用户查询、对话历史
-- 输出：回答、分类结果、检索来源、质量评分
+**ReactAgent** - 纯 ReAct Agent
+- 职责：通过 Thought-Action-Observation 循环自主决定推理步骤
+- 输入：用户查询、工具集
+- 输出：回答、推理步骤历史、检索来源
 - 特点：
-  - 支持依赖注入，可传入自定义组件
-  - 实现 Agent 模式，统一处理流程
-  - 提供同步和异步两种接口
+  - 纯 ReAct 范式：LLM 自主决定每步思考和工具调用
+  - 工具注册表模式：装饰器 `@ToolRegistry.register()` 自动注册工具
+  - 支持多步推理，最大步数可配置
+
+**工具注册表 (ToolRegistry)**
+- 提供工具的注册、查找和实例化功能
+- 支持自定义工具扩展
+- 内置工具：
+  - `retrieve`: 检索相关案例和政策文档
+  - `generate`: 生成回答文本
+  - `classify`: 分类问政类型（建议/投诉/求助/咨询）
+  - `validate`: 验证回答质量
+
+**工具协议 (BaseTool)**
+```python
+class BaseTool(Protocol):
+    @property
+    def name(self) -> str: ...
+    @property
+    def description(self) -> str: ...
+    async def execute(self, **kwargs) -> dict: ...
+```
 
 #### 2.1.2 组件层 (`src/app/components/`)
 
 **1. Retriever 组件** (`src/app/components/retrievers/`)
 - `BaseRetriever`: 抽象基类，定义检索接口
 - `HybridVectorRetriever`: 混合向量检索器实现
-  - 支持向量检索 + 多维度重排（相似度、时效性、权威性、长度）
+  - 支持向量检索 + 多维度重排（相似度、时效性、长度）
   - 支持缓存机制
   - 单例模式
 
@@ -111,7 +134,6 @@
 - `LLMGenerator`: LLM生成器实现
   - 封装 LLM Service
   - 支持同步/流式生成
-  - 支持生成质量验证
 
 **3. Classifier 组件** (`src/app/components/classifier/`)
 - `BaseClassifier`: 抽象基类，定义分类接口
@@ -119,22 +141,22 @@
   - 基于LLM的问政请求分类（建议/投诉/求助/咨询）
   - 支持批量分类
 
-**4. Memory 组件** (`src/app/components/memory/`)
-- `BaseMemory`: 抽象基类，定义记忆接口
-- `ConversationMemory`: 对话记忆实现
-  - 内存存储对话历史
-  - 支持保存/加载到文件
-  - 提供统计信息
+**4. Validator 组件** (`src/app/components/quality/`)
+- `BaseValidator`: 抽象基类，定义验证接口
+- `AnswerValidator`: 回答质量验证器
+  - 评估相关性、完整性、准确性
+  - 返回综合评分和反馈
 
 #### 2.1.3 基础设施层 (`src/app/infra/`)
 
 **1. LLM 服务** (`src/app/infra/llm/`)
 - `BaseLLMService`: 抽象基类
-- `LLMService`: Qwen API 封装
-  - 支持意图分析（Agent决策）
+- `multi_model_service.py`: 多模型 LLM 服务管理器
+  - `get_optimizer_llm_service()`: 获取优化模型（用于思考和动作生成）
+  - `get_heavy_llm_service()`: 获取主模型（用于最终答案生成）
+  - 支持意图分析
   - 支持回答生成
   - 支持回答质量校验
-  - 单例模式
 
 **2. 向量数据库** (`src/app/infra/db/`)
 - `BaseDBClient`: 抽象基类
@@ -162,29 +184,25 @@
   - `LoggingConfig`: 日志配置
   - `PerformanceConfig`: 性能配置
 
-### 2.3 数据流程
+### 2.3 数据流程 (ReAct Agent)
 
 ```
-1. 用户提问
-   ↓
-2. RagAgent 接收查询
-   ↓
-3. 分类器分类问政类型 (GovClassifier)
-   ↓
-4. 检索器检索相关案例 (HybridVectorRetriever)
-   ├── 向量检索（BGE-M3）
-   ├── 阈值筛选（TODO: 未启用）
-   ├── 多维度重排（TODO: 未启用）
-   └── 缓存查询
-   ↓
-5. 生成器生成回答 (LLMGenerator)
-   ├── 构建Prompt（包含检索结果）
-   ├── 调用LLM Service
-   └── 质量校验
-   ↓
-6. 保存到记忆 (ConversationMemory)
-   ↓
-7. 返回结果（回答 + 来源 + 质量评分）
+┌─────────────────────────────────────────────────────────────┐
+│                    ReAct 推理循环                            │
+│  Thought → Action → Observation → Thought → ...            │
+└─────────────────────────────────────────────────────────────┘
+         ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 1.Thought: LLM 分析当前状态并生成思考                       │
+│ 2.Action: 选择并执行工具 (retrieve/generate/classify/...)  │
+│ 3.Observation: 获取工具执行结果                             │
+│ 4.循环直到生成最终答案或达到最大步数                        │
+└─────────────────────────────────────────────────────────────┘
+         ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 5.使用主模型生成最终答案                                     │
+│ 6.返回结果（回答 + 步骤历史 + 来源）                        │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -198,7 +216,7 @@
 **核心功能**：
 1. **向量检索** - 使用 BGE-M3 模型将查询向量化，在Milvus中检索相似案例
 2. **缓存机制** - 对相同查询进行缓存，提升性能
-3. **混合重排** - 基于多维度评分进行结果重排（相似度/时效性/权威性/长度）
+3. **混合重排** - 基于多维度评分进行结果重排（相似度/时效性/长度）
 4. **阈值筛选** - 基于相似度阈值过滤低质量结果
 
 **配置参数**：
@@ -207,26 +225,62 @@
     "top_k": 5,                    # 默认返回结果数
     "cache_enabled": True,         # 是否启用缓存
     "cache_ttl": 300,              # 缓存过期时间（秒）
-    "min_similarity": 0.65,        # 基础相似度阈值
+    "min_similarity": 0.5,         # 基础相似度阈值
     "min_results": 3,              # 最小返回结果数
     "max_results": 10,             # 最大返回结果数
-    "weight_similarity": 0.8,      # 相似度权重
-    "weight_recency": 0.7,         # 时效性权重
-    "weight_authority": 0.2,       # 部门权威性权重
+    "weight_similarity": 0.6,      # 相似度权重
+    "weight_recency": 0.3,         # 时效性权重
     "weight_length": 0.1           # 内容长度权重
 }
 ```
 
-**当前状态**：阈值筛选和重排功能已实现但被注释（TODO标记），需启用
+**当前状态**：所有功能已实现并启用
 
-### 3.2 LLM 服务模块 (`src/app/infra/llm/`)
+### 3.2 工具注册表 (`src/app/agents/tools/`)
 
-#### LLMService
+#### ToolRegistry
 
 **核心功能**：
-1. **意图分析** - 分析用户查询意图，生成检索决策（AgentDecision）
-2. **回答生成** - 基于检索结果生成专业回答
-3. **质量校验** - 对生成回答进行质量评估
+1. **装饰器注册** - 通过 `@ToolRegistry.register()` 自动注册工具
+2. **实例管理** - 工具类注册时自动创建单例实例
+3. **动态查找** - 通过名称获取工具实例
+
+**使用示例**：
+```python
+from src.app.agents.tools.registry import ToolRegistry
+
+@ToolRegistry.register()
+class MyTool(BaseTool):
+    name = "my_tool"
+    description = "我的工具"
+
+    async def execute(self, **kwargs) -> dict:
+        return {"result": "xxx"}
+
+# 获取工具实例
+tool = ToolRegistry.get_instance("my_tool")
+```
+
+**内置工具**：
+- `RetrievalTool`: 检索相关案例和政策文档
+- `GenerationTool`: 生成回答文本
+- `ClassificationTool`: 分类问政类型
+- `ValidationTool`: 验证回答质量
+
+### 3.3 LLM 服务模块 (`src/app/infra/llm/`)
+
+#### multi_model_service
+
+**核心功能**：
+1. **多模型管理** - 根据任务类型选择合适的模型
+2. **意图分析** - 分析用户查询意图，生成检索决策（AgentDecision）
+3. **回答生成** - 基于检索结果生成专业回答
+4. **质量校验** - 对生成回答进行质量评估
+
+**模型服务**：
+- `get_optimizer_llm_service()`: 获取优化模型（用于思考和动作生成）
+- `get_heavy_llm_service()`: 获取主模型（用于最终答案生成）
+- `get_light_llm_service()`: 获取轻量模型（用于快速响应）
 
 **Agent决策类型**：
 - `direct_answer`: 无需检索，直接回答
@@ -240,7 +294,7 @@
 - `semantic_only`: 纯语义检索
 - `cross_dept`: 跨部门检索
 
-### 3.3 数据库模块 (`src/app/infra/db/`)
+### 3.4 数据库模块 (`src/app/infra/db/`)
 
 #### MilvusDBClient
 
@@ -269,24 +323,52 @@
 QA-Agent/
 ├── src/                        # 源代码目录
 │   ├── app/                    # 应用代码
-│   │   ├── agents/             # Agent层（RagAgent）
+│   │   ├── agents/             # Agent层（ReactAgent + Tools）
+│   │   │   ├── tools/          # 工具模块
+│   │   │   │   ├── registry.py     # 工具注册表
+│   │   │   │   ├── base_tool.py    # 工具基类
+│   │   │   │   ├── retrieval_tool.py
+│   │   │   │   ├── generation_tool.py
+│   │   │   │   ├── classification_tool.py
+│   │   │   │   └── validation_tool.py
+│   │   │   ├── models/         # 数据模型
+│   │   │   │   └── agent_decision.py
+│   │   │   ├── base_agent.py   # Agent 基类
+│   │   │   ├── react_agent.py  # ReAct Agent 实现
+│   │   │   └── __init__.py
 │   │   ├── components/         # 业务组件
 │   │   │   ├── retrievers/     # 检索器
 │   │   │   ├── generators/     # 生成器
 │   │   │   ├── classifier/     # 分类器
-│   │   │   └── memory/         # 记忆组件
+│   │   │   ├── memory/         # 记忆组件
+│   │   │   └── quality/        # 质量验证
 │   │   ├── infra/              # 基础设施
 │   │   │   ├── llm/            # LLM服务
+│   │   │   │   ├── multi_model_service.py
+│   │   │   │   ├── base_llm_service.py
+│   │   │   │   └── schema.py
 │   │   │   ├── db/             # 数据库客户端
+│   │   │   │   ├── milvus_db.py
+│   │   │   │   └── base_db.py
 │   │   │   └── utils/          # 工具类
-│   │   ├── api/                # API接口（待实现）
+│   │   │       ├── logger.py
+│   │   │       ├── data_utils.py
+│   │   │       └── system_utils.py
+│   │   ├── api/                # API接口
+│   │   │   ├── app.py          # FastAPI app
+│   │   │   └── routes.py       # API路由
 │   │   └── __init__.py         # 公共API导出
 │   └── config/                 # 配置管理
 │       └── setting.py          # 配置类
 │
 ├── tests/                      # 测试代码
-│   ├── services/               # 服务层测试
-│   ├── utils/                  # 工具类测试
+│   ├── agents/                 # Agent测试
+│   │   └── test_react_agent.py
+│   ├── components/             # 组件测试
+│   │   └── retrievers/         # 检索器测试
+│   ├── infra/                  # 基础设施测试
+│   │   └── utils/              # 工具类测试
+│   ├── config/                 # 配置测试
 │   ├── conftest.py             # 测试配置
 │   └── __init__.py
 │
@@ -322,80 +404,128 @@ QA-Agent/
 ### 4.2 依赖关系图
 
 ```
-src.app.agents.RagAgent
+src.app.agents.ReactAgent
+    ├── src.app.agents.tools.ToolRegistry
+    │   └── src.app.agents.tools.BaseTool
     ├── src.app.components.retrievers.HybridVectorRetriever
     │   ├── src.app.infra.db.MilvusDBClient
     │   ├── sentence_transformers.SentenceTransformer
     │   └── src.config.setting
     ├── src.app.components.generators.LLMGenerator
-    │   └── src.app.infra.llm.LLMService
+    │   └── src.app.infra.llm.multi_model_service
     │       ├── dashscope.Generation
     │       └── src.config.setting
     ├── src.app.components.classifier.GovClassifier
-    │   └── src.app.infra.llm.LLMService
-    └── src.app.components.memory.ConversationMemory
+    │   └── src.app.infra.llm.multi_model_service
+    └── src.app.components.quality.AnswerValidator
 ```
 
 ---
 
 ## 五、核心使用示例
 
-### 5.1 快速开始
+### 5.1 快速开始 (纯 ReAct Agent)
 
 ```python
 import asyncio
-from src import RagAgent, query_agentic_rag
+from src import ReactAgent, ToolRegistry
 
 async def main():
-    # 方式1: 使用工具函数
-    result = await query_agentic_rag(
-        query="2024年泸州市雨露计划补贴标准",
-        history=[]
-    )
+    # 创建工具集
+    tools = {
+        "retrieve": ToolRegistry.get_instance("retrieve"),
+        "generate": ToolRegistry.get_instance("generate"),
+        "classify": ToolRegistry.get_instance("classify"),
+        "validate": ToolRegistry.get_instance("validate"),
+    }
+
+    # 创建 ReactAgent
+    agent = ReactAgent(tools, max_steps=5)
+
+    # 方式1: 直接使用 Agent
+    result = await agent.process("2024年泸州市雨露计划补贴标准")
 
     print(f"回答: {result['answer']}")
-    print(f"分类: {result['classification']}")
-    print(f"来源: {len(result['sources'])}个案例")
-    print(f"质量评分: {result['quality_check']['overall_score']}")
+    print(f"推理步数: {result['steps_count']}")
+    print(f"来源: {len(result['sources'])} 个案例")
+    print(f"步骤历史: {len(result['steps_history'])} 步")
 
-    # 方式2: 使用Agent实例
-    agent = RagAgent()
-    result = await agent.process("如何办理社保？")
+    # 打印推理步骤
+    for step in result['steps_history']:
+        print(f"  Step {step['step_number']}: {step['action']}")
 
-    print(result)
+    # 方式2: 使用 API 接口（见 5.5）
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-### 5.2 检索器使用
+### 5.2 自定义工具
 
 ```python
-from src import get_retriever_instance, retrieve_with_details
+from src.app.agents.tools.registry import ToolRegistry
+from src.app.agents.tools.base_tool import BaseTool
 
-# 方式1: 获取单例实例
-retriever = get_retriever_instance()
-context, results, metadata = retriever.retrieve("雨露计划什么时候发放？")
+# 注册自定义工具
+@ToolRegistry.register()
+class CalculatorTool(BaseTool):
+    name = "calculator"
+    description = "计算数学表达式"
 
-# 方式2: 快捷函数
-result = retrieve_with_details("雨露计划", top_k=5)
-print(result["sources"])
+    async def execute(self, expression: str = "") -> dict:
+        try:
+            result = eval(expression)
+            return {"result": result}
+        except:
+            return {"result": "计算失败"}
+
+# 使用自定义工具
+tools["calculator"] = ToolRegistry.get_instance("calculator")
+agent = ReactAgent(tools, max_steps=5)
 ```
 
-### 5.3 LLM服务使用
+### 5.3 检索器使用
 
 ```python
-from src import get_llm_service
+from src.app.components.retrievers import HybridVectorRetriever
 
-llm = get_llm_service()
-response = await llm.generate_response(
-    query="用户问题",
-    context="检索到的上下文",
-    history=[{"role": "user", "content": "之前的问题"}]
-)
+# 使用单例实例
+retriever = HybridVectorRetriever()
+context, results, metadata = retriever.retrieve("雨露计划什么时候发放？", top_k=5)
 
-print(response["answer"])
-print(response["usage"])  # Token使用统计
+# 查看检索结果
+print(f"检索到 {len(results)} 个结果")
+print(f"平均相似度: {metadata['avg_similarity']:.2f}")
+```
+
+### 5.4 LLM服务使用
+
+```python
+from src import get_optimizer_llm_service, get_heavy_llm_service
+
+# 优化模型（用于思考和动作生成）
+optimizer_llm = get_optimizer_llm_service()
+
+# 主模型（用于最终答案生成）
+heavy_llm = get_heavy_llm_service()
+```
+
+### 5.5 API 接口使用
+
+```python
+# 启动 API 服务
+# uvicorn src.app.api.app:app --reload --host 0.0.0.0 --port 8000
+
+# 聊天接口
+curl -X POST http://localhost:8000/api/chat \
+    -H "Content-Type: application/json" \
+    -d '{"query": "雨露计划什么时候发放？", "history": [], "top_k": 5}'
+
+# 健康检查
+curl http://localhost:8000/api/health
+
+# 统计信息
+curl http://localhost:8000/api/stats
 ```
 
 ---
@@ -533,19 +663,31 @@ python scripts/demo/chat_demo.py
 - **便于测试**：每层可以独立测试
 - **便于维护**：修改一层不会影响其他层
 
-### 9.2 为什么使用抽象基类？
+### 9.2 为什么使用纯 ReAct 范式？
+
+- **自主推理**：LLM 自主决定每步思考和工具调用，更灵活
+- **可解释性强**：.clear 的 Thought-Action-Observation 循环
+- **易于扩展**：添加新工具即可扩展能力，无需修改 Agent 逻辑
+
+### 9.3 为什么使用工具注册表模式？
+
+- **装饰器注册**：通过 `@ToolRegistry.register()` 自动注册和实例化
+- **便于管理**：集中管理所有工具
+- **易于扩展**：自定义工具只需继承 BaseTool 并注册
+
+### 9.4 为什么使用抽象基类？
 
 - **依赖倒置**：高层模块不依赖低层模块，都依赖抽象
 - **易于替换**：可以轻松替换实现（如换用Elasticsearch替代Milvus）
 - **便于测试**：可以使用Mock对象进行单元测试
 
-### 9.3 为什么使用单例模式？
+### 9.5 为什么使用单例模式？
 
 - **资源优化**：避免重复加载模型和数据库连接
 - **全局一致**：确保所有地方使用同一个实例
 - **简化使用**：通过工厂函数获取实例
 
-### 9.4 为什么使用Milvus Lite而非完整版？
+### 9.6 为什么使用Milvus Lite而非完整版？
 
 - **轻量级**：适合单机部署和开发测试
 - **文件存储**：数据持久化到本地文件
@@ -557,11 +699,11 @@ python scripts/demo/chat_demo.py
 
 ### 10.1 短期目标
 
-1. ✅ 启用混合重排和阈值筛选功能
-2. ✅ 补充API层（FastAPI）
-3. ✅ 增加集成测试覆盖率
-4. ⏳ 实现Redis缓存
-5. ⏳ 实现Reranker重排模型
+1. ✅ 实现纯 ReAct Agent 架构
+2. ✅ 添加工具注册表模式
+3. ✅ 完善 API 层（FastAPI）
+4. ✅ 增加集成测试覆盖率
+5. ⏳ 实现Redis缓存
 
 ### 10.2 中期目标
 
@@ -623,29 +765,35 @@ settings.retriever.max_results = 15
 # RETRIEVER__MAX_RESULTS=15
 ```
 
-### Q2: 如何添加自定义组件？
+### Q2: 如何添加自定义工具？
 
 ```python
-from src.app.components.retrievers import BaseRetriever
+from src.app.agents.tools.registry import ToolRegistry
+from src.app.agents.tools.base_tool import BaseTool
 
-class CustomRetriever(BaseRetriever):
-    def initialize(self):
-        # 初始化资源
-        pass
+# 注册自定义工具
+@ToolRegistry.register()
+class CustomTool(BaseTool):
+    name = "custom_tool"
+    description = "我的自定义工具"
 
-    def retrieve(self, query, top_k=None, **kwargs):
-        # 实现检索逻辑
-        return context, results, metadata
+    async def execute(self, **kwargs) -> dict:
+        return {"result": "xxx"}
 
-    def retrieve_with_details(self, query, top_k=None, **kwargs):
-        # 实现详细检索逻辑
-        return details
-
-# 使用自定义组件
-agent = RagAgent(retriever=CustomRetriever())
+# 使用自定义工具
+tool = ToolRegistry.get_instance("custom_tool")
 ```
 
-### Q3: 如何调试日志？
+### Q3: ReactAgent 和 RagAgent 有什么区别？
+
+| 特性 | RagAgent | ReactAgent |
+|------|----------|------------|
+| 推理方式 | 预定义流程 | LLM 自主推理 |
+| 工具调用 | 手动编排 | 装饰器注册 |
+| 灵活性 | 固定流程 | 动态决策 |
+| 可扩展性 | 需修改代码 | 添加工具即可 |
+
+### Q4: 如何调试日志？
 
 ```python
 from src import settings
@@ -677,6 +825,6 @@ with LoggingContext("DEBUG"):
 
 ---
 
-**文档版本**: v1.0
-**最后更新**: 2026-02-19
+**文档版本**: v0.2.0 (ReAct Agent RAG)
+**最后更新**: 2026-02-22
 **维护者**: GovPulse Team

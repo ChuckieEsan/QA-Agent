@@ -1,17 +1,22 @@
 """
-GovPulse - 泸州市政务智能问答系统 (Agentic RAG)
+GovPulse - 泸州市政务智能问答系统 (Pure ReAct Agent RAG)
 
 提供统一的公共 API 接口
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __author__ = "GovPulse Team"
 
-# Agent 层
-from src.app.agents.rag_agent import RagAgent, query_agentic_rag
+# Agent 层 - 纯 ReAct 范式
+from src.app.agents import (
+    ReactAgent,
+    ReactStep,
+    ToolRegistry,
+    BaseTool,
+)
 from src.app.agents.models.agent_decision import AgentDecision, AgentDecisionType, RetrievalStrategy
 
-# LLM 服务（已重构）
+# LLM 服务
 from src.app.infra.llm.multi_model_service import (
     get_heavy_llm_service,
     get_light_llm_service,
@@ -55,10 +60,11 @@ from src.config.setting import (
 )
 
 __all__ = [
-    # Agent 层
-    "RagAgent",
-    "AgenticRAGEngine",  # 兼容别名
-    "query_agentic_rag",
+    # Agent 层 - 纯 ReAct 范式
+    "ReactAgent",
+    "ReactStep",
+    "ToolRegistry",
+    "BaseTool",
     "AgentDecision",
     "AgentDecisionType",
     "RetrievalStrategy",
@@ -79,8 +85,6 @@ __all__ = [
     "ConversationMemory",
     "BaseRetriever",
     "HybridVectorRetriever",
-    "retrieve_with_details",
-    "get_retriever_instance",
     "BaseValidator",
     "AnswerValidator",
 
