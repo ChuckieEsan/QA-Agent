@@ -31,4 +31,6 @@ logs
 
 !scripts/data
 
+docs/qwen_agent
+
 .claude

@@ -3,8 +3,9 @@ ReAct 工具层
 将现有组件封装为 ReAct 工具，支持动态调用
 """
 
+import inspect
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 
 class BaseTool(ABC):
@@ -48,6 +49,30 @@ class BaseTool(ABC):
             "description": self.description
         }
         return schema
+
+    def get_required_parameters(self) -> List[str]:
+        """
+        通过反射获取工具的必填参数
+
+        Returns:
+            必填参数名称列表（即没有默认值的参数）
+        """
+        required_params = []
+
+        try:
+            sig = inspect.signature(self.execute)
+
+            for name, param in sig.parameters.items():
+                if name in ('self', 'kwargs'):
+                    continue
+
+                if param.default == inspect.Parameter.empty:
+                    required_params.append(name)
+
+        except Exception:
+            pass
+
+        return required_params
 
     def __repr__(self):
         return f"{self.__class__.__name__}(name={self.name})"
