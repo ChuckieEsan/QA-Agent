@@ -5,17 +5,19 @@ LLM 生成器
 架构说明：
 - 使用主模型（qwen-max）生成复杂回答
 - 轻量任务由分类器等组件单独处理
+- 使用 Message 列表进行交互，支持系统/用户/助手/函数消息
 """
 
 import json
 import traceback
-from typing import Dict, List, Optional, AsyncGenerator
+from typing import Dict, List, Optional, AsyncGenerator, Union, Any
 from src.app.components.generators.base_generator import BaseGenerator
 from src.app.infra.llm.multi_model_service import (
     get_heavy_llm_service,
     get_light_llm_service,
     LLMService,
 )
+from src.app.infra.llm.schema import Message, message_list_to_dict
 from src.app.infra.utils.logger import get_logger
 from dashscope import Generation
 
@@ -27,6 +29,10 @@ class LLMGenerator(BaseGenerator):
     LLM 生成器
 
     使用主模型（heavy model）生成高质量回答
+    使用 Message 列表进行交互，支持：
+    - system/user/assistant/function 角色
+    - 多模态内容
+    - function_call 格式
     """
 
     _instance = None
@@ -43,6 +49,9 @@ class LLMGenerator(BaseGenerator):
         # 使用主模型生成回答
         self.llm_service: LLMService = get_heavy_llm_service()
 
+        # 默认系统消息
+        self.system_message = "你是一位专业的政务问答专家，善于分析用户问题、检索相关政策、生成专业回答。你的职责是：提供准确、权威、符合政策的政务咨询服务。"
+
         self._initialized = True
         logger.info(
             f"✅ LLM Generator 初始化完成（使用主模型: {self.llm_service.get_model_name()}）"
@@ -50,40 +59,45 @@ class LLMGenerator(BaseGenerator):
 
     async def generate(
         self,
-        prompt: str,
-        system_message: Optional[str] = None,
-        history: Optional[List[Dict]] = None,
+        messages: List[Dict[str, Any]],
         **kwargs,
     ) -> str:
         """
         同步生成文本（使用主模型）
 
         Args:
-            prompt: 用户提示词
-            system_message: 系统消息（可选）
-            history: 对话历史（可选）
-            **kwargs: 其他生成参数
+            messages: 消息列表，每个消息包含:
+                - role: "system" | "user" | "assistant" | "function"
+                - content: str | List[ContentItem]
+                - name: Optional[str]
+                - function_call: Optional[dict]
+            **kwargs: 其他生成参数（temperature, max_tokens, top_p 等）
 
         Returns:
             生成的文本
         """
-        # 构建完整 Prompt
-        full_prompt = self._build_prompt(prompt, system_message, history)
+        # 追加系统消息, 准备消息列表
+        prepared_messages = self._prepare_messages(messages)
+
+        # 转换为 prompt 字符串
+        prompt = self._convert_to_prompt(prepared_messages)
 
         # 使用主模型生成回答
         try:
             response = Generation.call(
                 model=self.llm_service.get_model_name(),
-                prompt=full_prompt,
-                temperature=self.llm_service.get_config().temperature,
-                max_tokens=self.llm_service.get_config().max_tokens,
-                top_p=self.llm_service.get_config().top_p,
-                result_format="text",  # 注意：使用 text 格式
+                prompt=prompt,
+                temperature=self._get_param(kwargs, 'temperature', self.llm_service.get_config().temperature),
+                max_tokens=self._get_param(kwargs, 'max_tokens', self.llm_service.get_config().max_tokens),
+                top_p=self._get_param(kwargs, 'top_p', self.llm_service.get_config().top_p),
+                result_format="text",
             )
 
             if response.status_code == 200:
-                # 注意：result_format='text' 时，结果在 output.text 而不是 choices
-                return response.output.text
+                response_text = response.output.text
+                # 将助手回复添加到消息历史
+                prepared_messages.append(Message(role="assistant", content=response_text))
+                return response_text
             else:
                 raise Exception(f"API调用失败: {response.code} - {response.message}")
 
@@ -94,51 +108,51 @@ class LLMGenerator(BaseGenerator):
 
     async def generate_stream(
         self,
-        prompt: str,
-        system_message: Optional[str] = None,
-        history: Optional[List[Dict]] = None,
+        messages: List[Dict[str, Any]],
         **kwargs,
     ) -> AsyncGenerator[str, None]:
         """
         流式生成文本（使用主模型）
 
         Args:
-            prompt: 用户提示词
-            system_message: 系统消息（可选）
-            history: 对话历史（可选）
+            messages: 消息列表
             **kwargs: 其他生成参数
 
         Yields:
             生成的文本片段
         """
-        full_prompt = self._build_prompt(prompt, system_message, history)
+        # 追加系统消息, 准备消息列表
+        prepared_messages = self._prepare_messages(messages)
+
+        # 转换为 prompt 字符串
+        prompt = self._convert_to_prompt(prepared_messages)
 
         # 使用主模型流式生成
         try:
             response = Generation.call(
                 model=self.llm_service.get_model_name(),
-                prompt=full_prompt,
-                temperature=self.llm_service.get_config().temperature,
-                max_tokens=self.llm_service.get_config().max_tokens,
-                top_p=self.llm_service.get_config().top_p,
+                prompt=prompt,
+                temperature=self._get_param(kwargs, 'temperature', self.llm_service.get_config().temperature),
+                max_tokens=self._get_param(kwargs, 'max_tokens', self.llm_service.get_config().max_tokens),
+                top_p=self._get_param(kwargs, 'top_p', self.llm_service.get_config().top_p),
                 stream=True,
-                result_format="text",  # 注意：流式也使用 text 格式
+                result_format="text",
             )
 
+            full_response = ""
             for chunk in response:
                 if chunk.status_code == 200:
-                    # 注意：流式响应中，text 在 output.text 中
                     if chunk.output and hasattr(chunk.output, "text"):
                         text = chunk.output.text
                         if text:
+                            full_response += text
                             yield text
-                    # 或者检查 choices（某些版本可能有）
-                    elif hasattr(chunk.output, "choices") and chunk.output.choices:
-                        for choice in chunk.output.choices:
-                            if hasattr(choice, "message") and choice.message.content:
-                                yield choice.message.content
                 else:
                     yield f"错误: {chunk.code} - {chunk.message}"
+
+            # 将助手回复添加到消息历史
+            if full_response:
+                prepared_messages.append(Message(role="assistant", content=full_response))
 
         except Exception as e:
             logger.error(f"❌ LLM 流式生成失败: {e}")
@@ -146,29 +160,34 @@ class LLMGenerator(BaseGenerator):
             yield "抱歉，生成回答时出现错误，请稍后重试。"
 
     async def generate_with_validation(
-        self, prompt: str, validation_criteria: Dict[str, any], **kwargs
-    ) -> Dict[str, any]:
+        self,
+        messages: List[Dict[str, Any]],
+        validation_criteria: Dict[str, Any],
+        **kwargs
+    ) -> Dict[str, Any]:
         """
         生成并验证文本（使用主模型）
 
         Args:
-            prompt: 用户提示词
+            messages: 消息列表
             validation_criteria: 验证标准
             **kwargs: 其他生成参数
 
         Returns:
             {
-                "text": str,                    # 生成的文本
-                "quality_score": float,         # 质量分数 (0-1)
-                "passed_validation": bool,      # 是否通过验证
-                "validation_details": Dict      # 验证详情
+                "text": str,
+                "quality_score": float,
+                "passed_validation": bool,
+                "validation_details": Dict
             }
         """
         # 生成文本
-        text = await self.generate(prompt, **kwargs)
+        text = await self.generate(messages, **kwargs)
 
         # 质量校验（使用轻量模型降低成本）
-        quality_score = await self._validate_with_light_model(text, prompt)
+        # 提取用户查询用于验证
+        query = self._extract_query_from_messages(messages)
+        quality_score = await self._validate_with_light_model(text, query)
 
         return {
             "text": text,
@@ -225,38 +244,52 @@ class LLMGenerator(BaseGenerator):
     async def initialize(self) -> None:
         """初始化生成器资源"""
         # 预热主模型
-        await self.generate("Hello")
+        await self.generate([{"role": "user", "content": "Hello"}])
         logger.info("✅ LLM Generator 预热完成")
 
-    def _build_prompt(
+    def _extract_query_from_messages(
         self,
-        prompt: str,
-        system_message: Optional[str] = None,
-        history: Optional[List[Dict]] = None,
+        messages: List[Dict[str, Any]]
     ) -> str:
         """
-        构建完整 Prompt
+        从消息列表中提取用户查询
 
         Args:
-            prompt: 用户提示词
-            system_message: 系统消息（可选）
-            history: 对话历史（可选）
+            messages: 消息列表
 
         Returns:
-            完整的 Prompt 字符串
+            用户查询字符串
         """
-        parts = []
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                content = msg.get("content", "")
+                if isinstance(content, list):
+                    # 提取文本内容
+                    text_parts = []
+                    for item in content:
+                        if isinstance(item, dict) and "text" in item:
+                            text_parts.append(item["text"])
+                        elif hasattr(item, "text"):
+                            text_parts.append(item.text)
+                    return " ".join(text_parts)
+                return str(content)
+        return ""
 
-        if system_message:
-            parts.append(f"## 系统指令\n{system_message}\n")
+    def _get_param(
+        self,
+        kwargs: Dict[str, Any],
+        key: str,
+        default: Any = None
+    ) -> Any:
+        """
+        从 kwargs 中获取参数，优先使用 kwargs
 
-        if history:
-            parts.append("## 对话历史")
-            for msg in history[-3:]:
-                role = "用户" if msg["role"] == "user" else "助手"
-                parts.append(f"{role}: {msg['content']}")
-            parts.append("")
+        Args:
+            kwargs: 关键字参数
+            key: 参数键
+            default: 默认值
 
-        parts.append(f"## 当前查询\n{prompt}")
-
-        return "\n".join(parts)
+        Returns:
+            参数值
+        """
+        return kwargs.get(key, default)

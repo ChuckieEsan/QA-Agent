@@ -160,3 +160,15 @@ class Message(BaseModelCompatibleDict):
                 f'{value} must be one of {",".join([USER, ASSISTANT, SYSTEM, FUNCTION])}'
             )
         return value
+
+
+def message_list_to_dict(messages: List[Message]) -> List[dict]:
+    """将 Message 列表转换为字典列表"""
+    return [msg.model_dump() for msg in messages]
+
+
+def dict_to_message_list(data: Union[dict, List[dict]]) -> List[Message]:
+    """将字典或字典列表转换为 Message 列表"""
+    if isinstance(data, dict):
+        return [Message(**data)]
+    return [Message(**item) for item in data]
