@@ -34,6 +34,7 @@ class BaseTool(ABC):
         """
         pass
 
+    @abstractmethod
     def get_schema(self) -> Dict[str, Any]:
         """
         获取工具 Schema (供 LLM 调用)
@@ -42,13 +43,9 @@ class BaseTool(ABC):
             工具 Schema 信息，包括：
             - name: 工具名称
             - description: 工具描述
-            - parameters: 参数说明（可选）
+            - parameters: Dict[str, str] 参数说明
         """
-        schema = {
-            "name": self.name,
-            "description": self.description
-        }
-        return schema
+        pass
 
     def get_required_parameters(self) -> List[str]:
         """

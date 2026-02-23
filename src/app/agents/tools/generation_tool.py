@@ -22,7 +22,7 @@ class GenerationTool(BaseTool):
     """
 
     name = "generate"
-    description = "生成回答文本"
+    description = "当已有足够信息可以回答问题，或需要整理、归纳、总结信息时，可以生成文本"
 
     def __init__(self, generator: Optional[BaseGenerator] = None):
         """

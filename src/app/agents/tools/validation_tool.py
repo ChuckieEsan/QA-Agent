@@ -22,7 +22,7 @@ class ValidationTool(BaseTool):
     """
 
     name = "validate"
-    description = "验证回答质量"
+    description = "验证回答是否符合网络问政场景的规范"
 
     def __init__(self, validator: Optional[BaseValidator] = None):
         """

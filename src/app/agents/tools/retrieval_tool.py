@@ -22,7 +22,7 @@ class RetrievalTool(BaseTool):
     """
 
     name = "retrieve"
-    description = "检索相关案例和政策文档"
+    description = "检索知识库已有的网络问政相关案例"
 
     def __init__(self, retriever: Optional[BaseRetriever] = None):
         """
