@@ -60,10 +60,10 @@ class ModelConfig(BaseConfig):
 
     # 重排模型
     reranker_model: Optional[str] = Field(
-        default=None, description="重排模型名称"
+        default="bge-reranker-base", description="重排模型名称"
     )
     reranker_model_path: Optional[Path] = Field(
-        default=None, description="重排模型本地路径"
+        default=PROJECT_ROOT / "models" / "bge-reranker-base", description="重排模型本地路径"
     )
 
 
@@ -104,10 +104,12 @@ class LLMConfig(BaseConfig):
     api_base: str = Field(default="https://dashscope.aliyuncs.com/compatible-mode/v1", description="API基础URL")
 
     # 主模型配置 - 用于生成复杂回答
-    heavy_model_name: str = Field(default="qwen-max", description="主模型名称（生成回答）")
+    heavy_model_name: str = Field(default="qwen3.5-397b-a17b", description="主模型名称（生成回答）")
 
     # 轻量模型配置 - 用于分类、校验等简单任务
-    light_model_name: str = Field(default="qwen-plus", description="轻量模型名称（分类/校验）")
+    light_model_name: str = Field(default="qwen3.5-flash", description="轻量模型名称（分类/校验）")
+    
+    optimizer_model_name: str = Field(default="qwen3.5-flash", description="轻量模型名称（分类/校验）")
 
     # 生成参数（主模型）
     temperature: float = Field(default=0.1, description="温度参数", ge=0.0, le=2.0)
@@ -117,6 +119,19 @@ class LLMConfig(BaseConfig):
     # 上下文配置
     max_context_length: int = Field(default=4000, description="最大上下文长度")
     enable_streaming: bool = Field(default=False, description="是否启用流式输出")
+
+    # LLM 调用次数限制
+    max_llm_calls: int = Field(
+        default=20,
+        description="每轮对话最大 LLM 调用次数（防无限循环）"
+    )
+    
+    # 工具调用配置
+    max_function_call_retries: int = Field(
+        default=2,
+        description="工具调用最大尝试次数"
+    )
+    
 
 
 class LoggingConfig(BaseConfig):
