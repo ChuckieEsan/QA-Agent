@@ -72,6 +72,10 @@
 
 8. **单例模式应用** - 对资源密集型组件（如 LLMService, Retriever）使用单例模式，避免重复初始化
 
+9. **动态参数获取** - 使用反射动态获取 BaseTool 子类参数，避免硬编码，增强灵活性
+
+10. **质量保障机制** - 内置回答质量校验组件，确保生成回答的准确性、完整性和相关性
+
 #### ⚠️ 潜在问题与改进建议
 
 1. **API 层待完善** - `src/app/api/` 目录已存在基础路由，可进一步完善文档和认证
@@ -100,10 +104,13 @@
   - 纯 ReAct 范式：LLM 自主决定每步思考和工具调用
   - 工具注册表模式：装饰器 `@ToolRegistry.register()` 自动注册工具
   - 支持多步推理，最大步数可配置
+  - 支持消息格式（Message）输入，兼容最新的LLM交互模式
+  - 包含内置验证和重试机制，确保回答质量
 
 **工具注册表 (ToolRegistry)**
 - 提供工具的注册、查找和实例化功能
 - 支持自定义工具扩展
+- 采用装饰器模式自动创建工具实例
 - 内置工具：
   - `retrieve`: 检索相关案例和政策文档
   - `generate`: 生成回答文本
@@ -112,12 +119,43 @@
 
 **工具协议 (BaseTool)**
 ```python
-class BaseTool(Protocol):
-    @property
-    def name(self) -> str: ...
-    @property
-    def description(self) -> str: ...
-    async def execute(self, **kwargs) -> dict: ...
+from abc import ABC, abstractmethod
+
+class BaseTool(ABC):
+    name: str              # 工具名称
+    description: str       # 工具描述
+
+    @abstractmethod
+    async def execute(self, **kwargs) -> dict:
+        """
+        执行工具
+
+        Args:
+            **kwargs: 工具执行参数
+
+        Returns:
+            Dict[str, Any]: 执行结果字典
+        """
+        pass
+
+    @abstractmethod
+    def get_schema(self) -> dict:
+        """
+        获取工具 Schema (供 LLM 调用)
+
+        Returns:
+            工具 Schema 信息
+        """
+        pass
+
+    def get_required_parameters(self) -> List[str]:
+        """
+        通过反射获取工具的必填参数
+
+        Returns:
+            必填参数名称列表（即没有默认值的参数）
+        """
+        pass
 ```
 
 #### 2.1.2 组件层 (`src/app/components/`)
@@ -126,10 +164,18 @@ class BaseTool(Protocol):
 - `BaseRetriever`: 抽象基类，定义检索接口
 - `HybridVectorRetriever`: 混合向量检索器实现
   - 支持向量检索 + 多维度重排（相似度、时效性、长度）
+  - **新增**: 集成 BGE 重排模型，提升检索结果相关性
   - 支持缓存机制
   - 单例模式
 
-**2. Generator 组件** (`src/app/components/generators/`)
+**2. Reranker 组件** (`src/app/components/rerankers/`) - **新增**
+- `BaseReranker`: 重排器抽象基类
+- `BGEReranker`: 基于 BGE-Reranker 的重排模型实现
+  - 支持精确的查询-文档相关性评分
+  - 高效的批量重排功能
+  - FP16 推理优化
+
+**3. Generator 组件** (`src/app/components/generators/`)
 - `BaseGenerator`: 抽象基类，定义生成接口
 - `LLMGenerator`: LLM生成器实现
   - 封装 LLM Service
@@ -146,6 +192,8 @@ class BaseTool(Protocol):
 - `AnswerValidator`: 回答质量验证器
   - 评估相关性、完整性、准确性
   - 返回综合评分和反馈
+  - 支持内置验证和重试机制
+  - 集成到 ReAct Agent 的推理循环中
 
 #### 2.1.3 基础设施层 (`src/app/infra/`)
 
@@ -154,6 +202,7 @@ class BaseTool(Protocol):
 - `multi_model_service.py`: 多模型 LLM 服务管理器
   - `get_optimizer_llm_service()`: 获取优化模型（用于思考和动作生成）
   - `get_heavy_llm_service()`: 获取主模型（用于最终答案生成）
+  - `get_light_llm_service()`: 获取轻量模型（用于快速响应）
   - 支持意图分析
   - 支持回答生成
   - 支持回答质量校验
@@ -233,6 +282,11 @@ class BaseTool(Protocol):
     "weight_length": 0.1           # 内容长度权重
 }
 ```
+
+**重排策略**：
+- 当配置了重排模型时，系统会优先使用 BGE 重排模型进行精确相关性评分
+- 若未配置重排模型，将使用传统的混合重排策略
+- 重排模型与传统策略相结合，提供更高质量的检索结果
 
 **当前状态**：所有功能已实现并启用
 
@@ -341,7 +395,11 @@ QA-Agent/
 │   │   │   ├── generators/     # 生成器
 │   │   │   ├── classifier/     # 分类器
 │   │   │   ├── memory/         # 记忆组件
-│   │   │   └── quality/        # 质量验证
+│   │   │   ├── quality/        # 质量验证
+│   │   │   └── rerankers/      # 重排器 - **新增**
+│   │   │       ├── base_reranker.py    # 重排器基类
+│   │   │       ├── bge_reranker.py     # BGE 重排模型实现
+│   │   │       └── __init__.py
 │   │   ├── infra/              # 基础设施
 │   │   │   ├── llm/            # LLM服务
 │   │   │   │   ├── multi_model_service.py
@@ -449,10 +507,13 @@ async def main():
     print(f"推理步数: {result['steps_count']}")
     print(f"来源: {len(result['sources'])} 个案例")
     print(f"步骤历史: {len(result['steps_history'])} 步")
+    print(f"检索耗时: {result.get('retrieval_time', 0):.2f}秒")
 
     # 打印推理步骤
     for step in result['steps_history']:
         print(f"  Step {step['step_number']}: {step['action']}")
+        if 'sources' in step:
+            print(f"    检索到 {len(step['sources'])} 个来源")
 
     # 方式2: 使用 API 接口（见 5.5）
 
@@ -526,6 +587,11 @@ curl http://localhost:8000/api/health
 
 # 统计信息
 curl http://localhost:8000/api/stats
+
+# ReAct Agent 专用接口
+curl -X POST http://localhost:8000/api/react-chat \
+    -H "Content-Type: application/json" \
+    -d '{"query": "2024年泸州市雨露计划补贴标准", "max_steps": 5}'
 ```
 
 ---
@@ -556,7 +622,12 @@ print(settings.llm.model_name)          # qwen-max
 # 访问子配置
 print(settings.paths.data_dir)
 print(settings.vectordb.collection_name)
-print(settings.retriever.base_threshold)
+print(settings.retriever.min_similarity)
+
+# 访问LLM配置
+print(settings.llm.heavy_model_name)    # 主模型（生成回答）
+print(settings.llm.light_model_name)    # 轻量模型（分类/校验）
+print(settings.llm.optimizer_model_name) # 优化模型（思考和动作生成）
 ```
 
 ---
@@ -703,7 +774,9 @@ python scripts/demo/chat_demo.py
 2. ✅ 添加工具注册表模式
 3. ✅ 完善 API 层（FastAPI）
 4. ✅ 增加集成测试覆盖率
-5. ⏳ 实现Redis缓存
+5. ✅ 实现回答质量校验组件
+6. ✅ 支持动态参数获取（使用反射机制）
+7. ⏳ 实现Redis缓存
 
 ### 10.2 中期目标
 
@@ -826,5 +899,5 @@ with LoggingContext("DEBUG"):
 ---
 
 **文档版本**: v0.2.0 (ReAct Agent RAG)
-**最后更新**: 2026-02-22
+**最后更新**: 2026-02-28
 **维护者**: GovPulse Team

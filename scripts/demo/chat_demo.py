@@ -6,7 +6,10 @@ from openai import AsyncClient
 
 sys.path.append(os.getcwd())
 
+from src.app.infra.utils.logger import get_logger
 from src.config.setting import settings
+
+logger = get_logger(__name__)
 
 init(autoreset=True)
 
@@ -21,11 +24,11 @@ async def chat_loop():
         user_input = input(f"{Fore.GREEN}用户: {Style.RESET_ALL}")
 
         if user_input.lower() in {"exit", "quit"}:
-            print("退出聊天。再见！")
+            logger.info("退出聊天。再见！")
             break
 
         messages.append({"role": "user", "content": user_input})
-        print(f"{Fore.YELLOW}AI 正在思考...{Style.RESET_ALL}")
+        logger.info("AI 正在思考...")
 
         full_response = ""
 

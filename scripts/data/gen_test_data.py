@@ -7,6 +7,9 @@ from tqdm import tqdm
 import dashscope
 from dashscope import Generation
 
+from src.app.infra.utils.logger import get_logger
+logger = get_logger(__name__)
+
 sys.path.append(os.getcwd())
 
 from src.config.setting import settings
@@ -34,14 +37,14 @@ def load_and_sample_data():
     df = df.rename(columns=rename_map).dropna(subset=['question', 'answer'])
     
     # 2. 生成 doc_id
-    print("正在计算 MD5 ID 以匹配数据库...")
+    logger.info("正在计算 MD5 ID 以匹配数据库...")
     df['doc_id'] = df.apply(lambda row: generate_doc_id(row['question'], row['answer']), axis=1)
     
     # 3. 筛选 Top K 部门
     top_depts = df['department'].value_counts().head(DEPT_TOP_K).index
     df_filtered = df[df['department'].isin(top_depts)].copy()
     
-    print(f"正在进行加权采样 (样本池大小: {len(df_filtered)})...")
+    logger.info(f"正在进行加权采样 (样本池大小: {len(df_filtered)})...")
 
     # 4. 计算采样权重
     # -------------------------------------------------------------
@@ -66,10 +69,10 @@ def load_and_sample_data():
     if len(df_filtered) >= SAMPLE_SIZE:
         sampled_df = df_filtered.sample(n=SAMPLE_SIZE, weights=weights, random_state=42, replace=False)
     else:
-        print(f"样本池数量 ({len(df_filtered)}) 少于目标采样数 ({SAMPLE_SIZE})，将全量返回。")
+        logger.warning(f"样本池数量 ({len(df_filtered)}) 少于目标采样数 ({SAMPLE_SIZE})，将全量返回。")
         sampled_df = df_filtered
         
-    print(f"采样完成。部门分布示例:\n{sampled_df['department'].value_counts().head(5)}")
+    logger.info(f"采样完成。部门分布示例:\n{sampled_df['department'].value_counts().head(5)}")
     return sampled_df
 
 
@@ -119,17 +122,17 @@ def rewrite_query(original_text, max_retries=3):
                     if isinstance(queries, list) and len(queries) > 0:
                         return queries, last_usage
                     else:
-                        print(f"[第 {attempt+1} 次] 格式错误 (非列表): {content[:30]}...")
+                        logger.warning(f"[第 {attempt+1} 次] 格式错误 (非列表): {content[:30]}...")
                 
                 except json.JSONDecodeError:
-                    print(f"[第 {attempt+1} 次] JSON 解析失败: {content[:30]}...")
+                    logger.warning(f"[第 {attempt+1} 次] JSON 解析失败: {content[:30]}...")
             else:
                 # API 层面报错 (如限流、服务器错误)
-                print(f"[第 {attempt+1} 次] API 报错 ({resp.code}): {resp.message}")
+                logger.warning(f"[第 {attempt+1} 次] API 报错 ({resp.code}): {resp.message}")
         
         except Exception as e:
             # 网络或其他未知异常
-            print(f"[第 {attempt+1} 次] 发生异常: {e}")
+            logger.warning(f"[第 {attempt+1} 次] 发生异常: {e}")
         
         # 如果还没到最后一次尝试，则进行等待 (指数退避: 1s, 2s, 4s...)
         if attempt < max_retries - 1:
@@ -137,16 +140,16 @@ def rewrite_query(original_text, max_retries=3):
             time.sleep(sleep_time)
             
     # === 所有重试都失败后的降级处理 ===
-    print(f"重试 {max_retries} 次后仍失败，降级使用原始文本。")
+    logger.warning(f"重试 {max_retries} 次后仍失败，降级使用原始文本。")
     return [short_text], last_usage
 
 
 def main():
-    print(f"正在构建测试集 (Target: {OUTPUT_PATH})...")
+    logger.info(f"正在构建测试集 (Target: {OUTPUT_PATH})...")
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
     
     sampled_df = load_and_sample_data()
-    print(f"已抽取 {len(sampled_df)} 条样本，开始 LLM 改写...")
+    logger.info(f"已抽取 {len(sampled_df)} 条样本，开始 LLM 改写...")
     
     results = []
     
@@ -177,24 +180,24 @@ def main():
             results.append(entry)
         
     # 写入 JSONL
-    print(f"正在写入 JSONL 文件...")
+    logger.info(f"正在写入 JSONL 文件...")
     with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
         for entry in results:
             f.write(json.dumps(entry, ensure_ascii=False) + '\n')
             
-    print(f"测试集生成完毕！共 {len(results)} 行。")
+    logger.info(f"测试集生成完毕！共 {len(results)} 行。")
     if results:
         # 打印前3条来看看（对应同一条原始数据的3个变体）
-        print(f"查看数据示例:\n{json.dumps(results[:3], ensure_ascii=False, indent=2)}")
+        logger.debug(f"查看数据示例:\n{json.dumps(results[:3], ensure_ascii=False, indent=2)}")
     
     # === 输出统计报告 ===
-    print("\n" + "="*30)
-    print("本次生成消耗统计")
-    print("="*30)
-    print(f"Total Input Tokens : {total_input_tokens}")
-    print(f"Total Output Tokens: {total_output_tokens}")
-    print(f"Total Tokens       : {total_input_tokens + total_output_tokens}")
-    print("="*30)
+    logger.info("="*30)
+    logger.info("本次生成消耗统计")
+    logger.info("="*30)
+    logger.info(f"Total Input Tokens : {total_input_tokens}")
+    logger.info(f"Total Output Tokens: {total_output_tokens}")
+    logger.info(f"Total Tokens       : {total_input_tokens + total_output_tokens}")
+    logger.info("="*30)
 
 if __name__ == "__main__":
     main()

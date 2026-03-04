@@ -453,20 +453,20 @@ def get_milvus_client_from_config(config: Dict) -> MilvusDBClient:
 
 if __name__ == "__main__":
     # 示例1: 使用单例模式
-    print("=" * 60)
-    print("示例1: 使用单例模式")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("示例1: 使用单例模式")
+    logger.info("=" * 60)
 
     client = get_milvus_client()
 
     # 获取统计信息
     count = client.get_entity_count()
-    print(f"📊 集合中现有数据量: {count}")
+    logger.info(f"📊 集合中现有数据量: {count}")
 
     # 示例2: 使用上下文管理器
-    print("\n" + "=" * 60)
-    print("示例2: 使用上下文管理器")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("示例2: 使用上下文管理器")
+    logger.info("=" * 60)
 
     config = {
         "db_path": str(settings.vectordb.db_path),
@@ -476,6 +476,6 @@ if __name__ == "__main__":
 
     with MilvusDBClient(config) as client_ctx:
         stats = client_ctx.get_collection_stats()
-        print(f"📊 集合统计信息: {stats}")
+        logger.info(f"📊 集合统计信息: {stats}")
 
-    print("\n✅ 示例运行完成")
+    logger.info("\n✅ 示例运行完成")

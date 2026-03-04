@@ -7,7 +7,6 @@
 
 import asyncio
 import argparse
-import logging
 import time
 import random
 import os
@@ -21,6 +20,9 @@ from pathlib import Path
 sys.path.append(os.getcwd())
 from src.config.setting import settings
 
+from src.app.infra.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import aiosqlite
 from playwright.async_api import (
     async_playwright,
@@ -28,19 +30,6 @@ from playwright.async_api import (
     Browser,
     TimeoutError as PWTimeout,
 )
-
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - [%(funcName)s] %(message)s",
-    handlers=[
-        logging.FileHandler(
-            f'{settings.paths.log_dir}/spider_{datetime.now().strftime("%Y%m%d")}.log', encoding="utf-8"
-        ),
-        logging.StreamHandler(sys.stdout),
-    ],
-)
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -465,7 +454,7 @@ class LZEPSpider:
             ).first.text_content()
             data["category"] = None
 
-            print(data)
+            logger.debug(data)
 
             return QuestionItem(**data, crawl_time=datetime.now().isoformat())
 
@@ -582,7 +571,7 @@ class LZEPSpider:
 
             # 最终统计
             self.progress.display()
-            print()  # 换行
+            # print()  # 换行
             summary = self.progress.summary()
             db_stats = await self.db.get_stats()
 
@@ -701,7 +690,7 @@ def main():
     try:
         asyncio.run(spider.run())
     except KeyboardInterrupt:
-        print("\n\n⛔ 用户强制退出")
+        logger.info("用户强制退出")
     except Exception as e:
         logger.exception(f"程序异常: {e}")
 

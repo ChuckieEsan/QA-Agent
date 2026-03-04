@@ -5,6 +5,9 @@ from tqdm import tqdm
 from pymilvus import MilvusClient
 from sentence_transformers import SentenceTransformer
 
+from src.app.infra.utils.logger import get_logger
+logger = get_logger(__name__)
+
 sys.path.append(os.getcwd())
 
 from src.config.setting import settings
@@ -20,10 +23,10 @@ SQLITE_DB_PATH = str(settings.paths.raw_data_db_path)
 def init_milvus(client: MilvusClient):
     """初始化数据库集合 Schema"""
     if client.has_collection(COLLECTION_NAME):
-        print(f"检测到集合 {COLLECTION_NAME} 已存在，正在删除重建...")
+        logger.info(f"检测到集合 {COLLECTION_NAME} 已存在，正在删除重建...")
         client.drop_collection(COLLECTION_NAME)
 
-    print("🔨 创建新集合 Schema...")
+    logger.info("创建新集合 Schema...")
     client.create_collection(
         collection_name=COLLECTION_NAME,
         dimension=settings.models.embedding_size, # BGE-M3 维度
@@ -56,21 +59,21 @@ def process_and_ingest():
     try:
         rows = fetch_data_from_sqlite(SQLITE_DB_PATH)
     except Exception as e:
-        print(f"❌ 读取 SQLite 失败: {e}")
+        logger.error(f"读取 SQLite 失败: {e}")
         return
 
-    print(f"📖 有效数据量: {len(rows)} 条")
+    logger.info(f"有效数据量: {len(rows)} 条")
     if len(rows) == 0:
-        print("⚠️ 数据库为空，请先运行 crawl.py")
+        logger.warning("数据库为空，请先运行 crawl.py")
         return
 
     # 2. 加载模型
     device = get_device()
-    print(f"📥 加载 Embedding 模型: {MODEL_PATH} ...")
+    logger.info(f"加载 Embedding 模型: {MODEL_PATH} ...")
     try:
         embed_model = SentenceTransformer(MODEL_PATH, device=device)
     except Exception as e:
-        print(f"❌ 模型加载失败: {e}")
+        logger.error(f"模型加载失败: {e}")
         return
 
     # 3. 初始化 Milvus
@@ -80,7 +83,7 @@ def process_and_ingest():
 
     # 4. 批量处理
     total_rows = len(rows)
-    print("🚀 开始向量化并入库...")
+    logger.info("开始向量化并入库...")
     
     # 将 sqlite3.Row 对象转换为字典列表，方便处理
     data_list = [dict(row) for row in rows]
@@ -134,11 +137,11 @@ def process_and_ingest():
             
         client.insert(COLLECTION_NAME, data_to_insert)
 
-    print(f"\n🎉 入库完成！数据库: {MILVUS_DB_PATH}")
+    logger.info(f"入库完成！数据库: {MILVUS_DB_PATH}")
 
     # 验证测试
     test_query = "雨露计划什么时候发？"
-    print(f"\n测试检索: '{test_query}'")
+    logger.info(f"测试检索: '{test_query}'")
     query_vec = embed_model.encode([test_query], normalize_embeddings=True)
     
     res = client.search(
@@ -149,9 +152,9 @@ def process_and_ingest():
     )
     
     for rank, hit in enumerate(res[0]):
-        print(f"\n--- Rank {rank+1} (Score: {hit['distance']:.4f}) ---")
-        print(f"部门: {hit['entity'].get('department')}")
-        print(f"内容摘要: {hit['entity'].get('text')[:100]}...")
+        logger.info(f"Rank {rank+1} (Score: {hit['distance']:.4f})")
+        logger.info(f"部门: {hit['entity'].get('department')}")
+        logger.info(f"内容摘要: {hit['entity'].get('text')[:100]}...")
 
 if __name__ == "__main__":
     process_and_ingest()

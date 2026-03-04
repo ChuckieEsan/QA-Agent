@@ -1,6 +1,6 @@
 [project]
 name = "qa-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "GovPulse - 泸州市政务智能问答系统 (Agentic RAG)"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -12,6 +12,7 @@ dependencies = [
     "fastapi>=0.128.0",
     "flagembedding>=1.3.5",
     "jieba>=0.42.1",
+    "langgraph>=1.0.6",
     "logging>=0.4.9.6",
     "milvus-lite>=2.5.1",
     "modelscope>=1.34.0",

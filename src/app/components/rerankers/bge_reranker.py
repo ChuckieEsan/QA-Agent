@@ -9,6 +9,7 @@ from pathlib import Path
 
 from FlagEmbedding import FlagReranker
 from src.config.setting import settings
+from src.app.infra.utils.logger import get_logger
 from .base_reranker import BaseReranker
 
 
@@ -26,10 +27,13 @@ class BGEReranker(BaseReranker):
         Args:
             model_path: 重排模型路径，如果为 None 则使用 settings 中的配置
         """
+        # 获取日志记录器
+        self.logger = get_logger(__name__)
+
         if model_path is None:
             model_path = settings.models.reranker_model_path
 
-        print(f"🔄 [BGEReranker] 加载重排模型: {model_path} ...")
+        self.logger.info(f"加载重排模型: {model_path} ...")
 
         # 检查模型路径是否存在
         if not model_path.exists():
@@ -42,7 +46,7 @@ class BGEReranker(BaseReranker):
         )
 
         self.model_path = model_path
-        print(f"✅ [BGEReranker] 重排模型加载完成")
+        self.logger.info("重排模型加载完成")
 
     def rerank(
         self,

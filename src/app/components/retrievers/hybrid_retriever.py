@@ -12,7 +12,11 @@ from sentence_transformers import SentenceTransformer
 from src.config.setting import settings
 from src.app.infra.utils import get_device
 from src.app.infra.db.milvus_db import MilvusDBClient
+from src.app.components.rerankers import BGEReranker
 from .base_retriever import BaseRetriever
+from src.app.infra.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class HybridVectorRetriever(BaseRetriever):
@@ -57,10 +61,10 @@ class HybridVectorRetriever(BaseRetriever):
 
         super().__init__(default_config)
 
-        print("🔄 [HybridRetriever] 初始化混合策略检索器...")
+        logger.info("[HybridRetriever] 初始化混合策略检索器...")
         self.initialize()
         self._is_initialized = True
-        print("✅ [HybridRetriever] 初始化完成")
+        logger.info("[HybridRetriever] 初始化完成")
 
     def initialize(self) -> None:
         """
@@ -70,14 +74,14 @@ class HybridVectorRetriever(BaseRetriever):
         """
         # 1. 加载 Embedding 模型
         self.device = get_device()
-        print(f"📥 加载 Embedding 模型: {settings.models.embedding_model_path} ...")
+        logger.info(f"加载 Embedding 模型: {settings.models.embedding_model_path} ...")
         self.embed_model = SentenceTransformer(
             str(settings.models.embedding_model_path),
             device=self.device
         )
 
         # 2. 连接向量数据库
-        print(f"🔌 连接 Milvus: {settings.vectordb.db_path} ...")
+        logger.info(f"连接 Milvus: {settings.vectordb.db_path} ...")
         self.milvus_client = MilvusDBClient()
         self.collection_name = settings.vectordb.collection_name
 
@@ -91,6 +95,19 @@ class HybridVectorRetriever(BaseRetriever):
             "recency": settings.retriever.weight_recency,
             "length": settings.retriever.weight_length,
         }
+
+        # 5. 初始化 BGE 重排模型（如果配置了模型路径）
+        self.reranker = None
+        if (settings.models.reranker_model and
+            settings.models.reranker_model_path and
+            settings.models.reranker_model_path.exists()):
+            try:
+                logger.info(f"加载 BGE 重排模型: {settings.models.reranker_model_path} ...")
+                self.reranker = BGEReranker(model_path=settings.models.reranker_model_path)
+                logger.info("BGE 重排模型加载完成")
+            except Exception as e:
+                logger.warning(f"BGE 重排模型加载失败: {e}")
+                logger.warning("将仅使用传统重排方法")
 
         # 6. 时间衰减权重
         self.recency_weights = settings.retriever.recency_weights
@@ -141,7 +158,7 @@ class HybridVectorRetriever(BaseRetriever):
             if cached_result:
                 context, results, metadata = cached_result
                 metadata["cache_hit"] = True
-                print(f"🔄 使用缓存结果: {cache_key[:30]}...")
+                logger.debug(f"使用缓存结果: {cache_key[:30]}...")
                 return context, results, metadata
 
         try:
@@ -239,8 +256,8 @@ class HybridVectorRetriever(BaseRetriever):
 
         except Exception as e:
             import traceback
-            print(f"⚠️ [HybridRetriever] 检索失败: {e}")
-            print(traceback.format_exc())
+            logger.error(f"[HybridRetriever] 检索失败: {e}")
+            logger.error(traceback.format_exc())
             # 返回包含必要字段的 metadata
             return f"检索服务暂时不可用: {str(e)}", [], {
                 "query": query,
@@ -281,7 +298,7 @@ class HybridVectorRetriever(BaseRetriever):
                 adaptive_threshold = max(threshold * 0.8, mean_sim - 0.1)
                 adaptive_threshold = max(0.3, adaptive_threshold)  # 保底阈值
 
-                print(f"📊 阈值动态调整: {threshold:.3f} → {adaptive_threshold:.3f}")
+                logger.info(f"阈值动态调整: {threshold:.3f} → {adaptive_threshold:.3f}")
                 filtered = [r for r in results if r["similarity"] >= adaptive_threshold]
 
         # 返回筛选后的结果
@@ -295,47 +312,79 @@ class HybridVectorRetriever(BaseRetriever):
         1. 向量相似度 (60%)
         2. 时效性 (30%)
         3. 内容长度 (10%)
+        4. BGE 重排模型 (如果可用)
         """
         if len(results) <= 1:
             return results
 
-        current_time = datetime.now()
-        features = {key: [] for key in self.rerank_weights.keys()}
+        # 如果存在BGE重排模型，优先使用它进行重排
+        if self.reranker is not None:
+            logger.info(f"使用 BGE 重排模型对 {len(results)} 个结果进行重排...")
+            reranked_results = self.reranker.rerank(query, results)
 
-        for hit in results:
-            # 1. 相似度特征
-            features["similarity"].append(hit["similarity"])
+            # 将BGE重排得分与其他特征结合起来
+            for hit in reranked_results:
+                # 使用BGE重排得分作为主要的composite_score
+                hit["composite_score"] = hit.get("rerank_score", 0.0)
 
-            # 2. 时效性特征
-            time_str = hit["entity"].get("metadata", {}).get("time", "")
-            recency = self._calculate_recency(time_str, current_time)
-            features["recency"].append(recency)
+                # 保存原有相似度特征用于显示
+                hit["original_similarity"] = hit.get("similarity", 0.0)
 
-            # 3. 内容长度特征
-            text_len = len(hit["entity"].get("text", ""))
-            length_score = min(1.0, text_len / 1500)
-            # TODO: 内容长度这里需要调整
-            features["length"].append(length_score)
+                # 计算其他特征用于更精细的排序
+                current_time = datetime.now()
+                time_str = hit["entity"].get("metadata", {}).get("time", "")
+                recency = self._calculate_recency(time_str, current_time)
 
-        # 归一化特征
-        norm_features = {}
-        for key, values in features.items():
-            norm_features[key] = self._normalize_features(values)
+                text_len = len(hit["entity"].get("text", ""))
+                length_score = min(1.0, text_len / 1500)
 
-        # 计算综合评分
-        for i, hit in enumerate(results):
-            composite_score = 0
-            for key, weight in self.rerank_weights.items():
-                composite_score += norm_features[key][i] * weight
+                # 保存特征值供后续使用
+                hit["rerank_features"] = {
+                    "similarity": hit.get("original_similarity", 0.0),
+                    "recency": recency,
+                    "length": length_score,
+                    "bge_rerank": hit.get("rerank_score", 0.0)
+                }
 
-            hit["composite_score"] = composite_score
-            hit["rerank_features"] = {
-                key: norm_features[key][i] for key in self.rerank_weights.keys()
-            }
+            return reranked_results
+        else:
+            # 如果没有BGE重排模型，则使用传统的混合重排策略
+            current_time = datetime.now()
+            features = {key: [] for key in self.rerank_weights.keys()}
 
-        # 按综合评分降序排序
-        results.sort(key=lambda x: x["composite_score"], reverse=True)
-        return results
+            for hit in results:
+                # 1. 相似度特征
+                features["similarity"].append(hit["similarity"])
+
+                # 2. 时效性特征
+                time_str = hit["entity"].get("metadata", {}).get("time", "")
+                recency = self._calculate_recency(time_str, current_time)
+                features["recency"].append(recency)
+
+                # 3. 内容长度特征
+                text_len = len(hit["entity"].get("text", ""))
+                length_score = min(1.0, text_len / 1500)
+                features["length"].append(length_score)
+
+            # 归一化特征
+            norm_features = {}
+            for key, values in features.items():
+                norm_features[key] = self._normalize_features(values)
+
+            # 计算综合评分
+            for i, hit in enumerate(results):
+                composite_score = 0
+                for key, weight in self.rerank_weights.items():
+                    composite_score += norm_features[key][i] * weight
+
+                hit["composite_score"] = composite_score
+                hit["rerank_features"] = {
+                    key: norm_features[key][i] for key in self.rerank_weights.keys()
+                }
+
+            # 按综合评分降序排序
+            results.sort(key=lambda x: x["composite_score"], reverse=True)
+            return results
 
     def _calculate_recency(self, time_str: str, current_time: datetime) -> float:
         """计算时效性分数"""

@@ -7,6 +7,9 @@ import pytest
 from src.app.agents import ReactAgent, ReactStep, ToolRegistry
 from src.app.agents.tools import BaseTool
 
+from src.app.infra.utils.logger import get_logger
+logger = get_logger(__name__)
+
 
 class TestReactTools:
     """测试 ReAct 工具"""
@@ -31,7 +34,7 @@ class TestReactTools:
         assert isinstance(tools["classify"], BaseTool)
         assert isinstance(tools["validate"], BaseTool)
 
-        print("✅ 工具集创建成功")
+        logger.info("工具集创建成功")
 
     @pytest.mark.asyncio
     async def test_retrieval_tool(self):
@@ -49,7 +52,7 @@ class TestReactTools:
         assert "results" in result
         assert "metadata" in result
 
-        print("✅ 检索工具测试通过")
+        logger.info("检索工具测试通过")
 
     @pytest.mark.asyncio
     async def test_generation_tool(self):
@@ -66,7 +69,7 @@ class TestReactTools:
         assert isinstance(result["answer"], str)
         assert len(result["answer"]) > 0
 
-        print("✅ 生成工具测试通过")
+        logger.info("生成工具测试通过")
 
     @pytest.mark.asyncio
     async def test_classification_tool(self):
@@ -84,7 +87,7 @@ class TestReactTools:
         assert isinstance(result["type"], str)
         assert isinstance(result["confidence"], float)
 
-        print("✅ 分类工具测试通过")
+        logger.info("分类工具测试通过")
 
 
 class TestReactAgent:
@@ -104,7 +107,7 @@ class TestReactAgent:
         assert agent.max_steps == 3
         assert len(agent.tools) == 4
 
-        print("✅ ReactAgent 初始化成功")
+        logger.info("ReactAgent 初始化成功")
 
     @pytest.mark.asyncio
     async def test_basic_reasoning(self):
@@ -133,9 +136,9 @@ class TestReactAgent:
         assert all("action" in step for step in result["steps_history"])
         assert all("observation" in step for step in result["steps_history"])
 
-        print("✅ 基础推理测试通过")
-        print(f"  推理步数: {result['steps_count']}")
-        print(f"  答案: {result['answer'][:50]}...")
+        logger.info("基础推理测试通过")
+        logger.debug(f"推理步数: {result['steps_count']}")
+        logger.debug(f"答案: {result['answer'][:50]}...")
 
     @pytest.mark.asyncio
     async def test_multi_step_reasoning(self):
@@ -156,8 +159,8 @@ class TestReactAgent:
         # 验证答案
         assert len(result["answer"]) > 0
 
-        print("✅ 多步推理测试通过")
-        print(f"  推理步数: {result['steps_count']}")
+        logger.info("多步推理测试通过")
+        logger.debug(f"推理步数: {result['steps_count']}")
 
     @pytest.mark.asyncio
     async def test_step_history_detail(self):
@@ -181,7 +184,7 @@ class TestReactAgent:
         assert "observation" in first_step
         assert "timestamp" in first_step
 
-        print("✅ 推理历史详细信息测试通过")
+        logger.info("推理历史详细信息测试通过")
 
 
 class TestToolRegistry:
@@ -217,7 +220,7 @@ class TestToolRegistry:
 
 async def manual_test_basic_functionality():
     """手动测试基础功能"""
-    print("\n=== 手动测试：基础功能 ===")
+    logger.info("=== 手动测试：基础功能 ===")
 
     # 测试工具集创建
     tools = {
@@ -226,24 +229,24 @@ async def manual_test_basic_functionality():
     "classify": ToolRegistry.get_instance("classify"),
     "validate": ToolRegistry.get_instance("validate"),
 }
-    print(f"✅ 工具集创建成功: {list(tools.keys())}")
+    logger.info(f"工具集创建成功: {list(tools.keys())}")
 
     # 测试 ReactAgent
     agent = ReactAgent(tools, max_steps=3)
-    print(f"✅ ReactAgent 初始化成功 (max_steps={agent.max_steps})")
+    logger.info(f"ReactAgent 初始化成功 (max_steps={agent.max_steps})")
 
     # 测试基本推理
     result = await agent.process("2024年泸州雨露计划补贴标准")
 
-    print(f"✅ 基础功能测试通过")
-    print(f"  推理步数: {result['steps_count']}")
-    print(f"  答案: {result['answer'][:100]}...")
-    print(f"  步骤历史: {len(result['steps_history'])} 步")
+    logger.info(f"基础功能测试通过")
+    logger.debug(f"推理步数: {result['steps_count']}")
+    logger.debug(f"答案: {result['answer'][:100]}...")
+    logger.debug(f"步骤历史: {len(result['steps_history'])} 步")
 
 
 async def manual_test_tool_extension():
     """手动测试工具扩展"""
-    print("\n=== 手动测试：工具扩展 ===")
+    logger.info("=== 手动测试：工具扩展 ===")
 
     # 注册自定义工具
     @ToolRegistry.register("calculator")
@@ -268,16 +271,16 @@ async def manual_test_tool_extension():
     }
 
     agent = ReactAgent(tools, max_steps=3)
-    print(f"✅ 自定义工具注册成功")
+    logger.info(f"自定义工具注册成功")
 
     result = await agent.process("计算 2+2*5")
-    print(f"✅ 工具扩展测试通过")
-    print(f"  最终答案: {result['answer']}")
+    logger.info(f"工具扩展测试通过")
+    logger.debug(f"最终答案: {result['answer']}")
 
 
 async def manual_test_full_workflow():
     """手动测试完整工作流"""
-    print("\n=== 手动测试：完整工作流 ===")
+    logger.info("=== 手动测试：完整工作流 ===")
 
     tools = {
     "retrieve": ToolRegistry.get_instance("retrieve"),
@@ -295,22 +298,22 @@ async def manual_test_full_workflow():
     ]
 
     for query in test_cases:
-        print(f"\n--- 测试: {query} ---")
+        logger.info(f"测试: {query}")
         result = await agent.process(query)
 
-        print(f"  答案: {result['answer'][:100]}...")
-        print(f"  推理步数: {result['steps_count']}")
-        print(f"  检索来源: {len(result['sources'])} 个")
+        logger.debug(f"答案: {result['answer'][:100]}...")
+        logger.debug(f"推理步数: {result['steps_count']}")
+        logger.debug(f"检索来源: {len(result['sources'])} 个")
 
         # 检查推理历史
         assert len(result['steps_history']) == result['steps_count']
 
         # 打印推理步骤
-        print(f"  推理步骤:")
+        logger.debug(f"推理步骤:")
         for step in result['steps_history']:
-            print(f"    Step {step['step_number']}: {step['action']}")
+            logger.debug(f"Step {step['step_number']}: {step['action']}")
 
-    print("\n✅ 完整工作流测试通过")
+        logger.info("完整工作流测试通过")
 
 
 if __name__ == "__main__":
@@ -319,6 +322,6 @@ if __name__ == "__main__":
     asyncio.run(manual_test_tool_extension())
     asyncio.run(manual_test_full_workflow())
 
-    print("\n" + "=" * 50)
-    print("✅ 所有手动测试通过！")
-    print("=" * 50)
+    logger.info("=" * 50)
+    logger.info("所有手动测试通过！")
+    logger.info("=" * 50)
