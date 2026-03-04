@@ -1,19 +1,19 @@
 """
-GovPulse - 泸州市政务智能问答系统 (Pure ReAct Agent RAG)
+GovPulse - 泸州市政务智能问答系统
 
-提供统一的公共 API 接口
+基于 LangGraph 实现的多智能体协同架构
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __author__ = "GovPulse Team"
 
-# Agent 层 - 纯 ReAct 范式
+# Agent 层 - LangGraph 多智能体协同
 from src.app.agents import (
-    ReactAgent,
-    ToolRegistry,
-    BaseTool,
+    AppealState,
+    invoke,
+    ainvoke,
+    get_mvp_graph,
 )
-from src.app.agents.models.agent_decision import AgentDecision, AgentDecisionType, RetrievalStrategy
 
 # LLM 服务
 from src.app.infra.llm.multi_model_service import (
@@ -59,13 +59,11 @@ from src.config.setting import (
 )
 
 __all__ = [
-    # Agent 层 - 纯 ReAct 范式
-    "ReactAgent",
-    "ToolRegistry",
-    "BaseTool",
-    "AgentDecision",
-    "AgentDecisionType",
-    "RetrievalStrategy",
+    # Agent 层 - LangGraph 多智能体协同
+    "AppealState",
+    "invoke",
+    "ainvoke",
+    "get_mvp_graph",
 
     # LLM 服务
     "get_heavy_llm_service",

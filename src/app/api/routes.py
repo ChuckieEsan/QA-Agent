@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import asyncio
 
-from src import query_agentic_rag
+from src.app.agents.langgraph import ainvoke
 from src.app.infra.utils.logger import get_logger
 from src.app.infra.db.milvus_db import MilvusDBClient
 
@@ -99,13 +99,17 @@ async def chat(request: ChatRequest):
     try:
         logger.info(f"💬 收到聊天请求: {request.query[:30]}...")
 
-        # 调用 Agentic RAG
-        result = await query_agentic_rag(query=request.query, history=request.history)
+        # 调用 LangGraph MVP 工作流
+        state = await ainvoke(request.query)
 
         # 构建响应
         response = ChatResponse(
-            answer=result["answer"],
-            classification=result["classification"],
+            answer=state.get("final_response", ""),
+            classification={
+                "type": state.get("appeal_type", "未知"),
+                "urgency_level": state.get("urgency_level", "一般"),
+                "department": state.get("department", "未知"),
+            },
             sources=[
                 SourceItem(
                     rank=i + 1,
@@ -115,10 +119,10 @@ async def chat(request: ChatRequest):
                     time=source.get("time", "未知时间"),
                     composite_score=source.get("composite_score", 0.0),
                 )
-                for i, source in enumerate(result["sources"])
+                for i, source in enumerate(state.get("retrieval_results", []))
             ],
-            quality_score=result["quality_check"].get("overall_score", 0.0),
-            retrieval_time=result["metadata"].get("retrieval_time", 0.0),
+            quality_score=state.get("validation_result", {}).get("overall_score", 0.0),
+            retrieval_time=state.get("retrieval_metadata", {}).get("retrieval_time", 0.0),
             steps=1,
             timestamp=datetime.now().isoformat(),
         )
