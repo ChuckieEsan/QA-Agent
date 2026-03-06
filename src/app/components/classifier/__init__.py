@@ -3,10 +3,10 @@
 """
 
 from src.app.components.classifier.base_classifier import BaseClassifier, GovRequestType
-from src.app.components.classifier.gov_classifier import GovClassifier
+from src.app.components.classifier.request_classifier import GovRequestClassifier
 
 __all__ = [
     "BaseClassifier",
-    "GovClassifier",
+    "GovRequestClassifier",
     "GovRequestType",
 ]

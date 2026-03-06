@@ -10,17 +10,19 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 env_path = PROJECT_ROOT / ".env"
 if env_path.exists():
     load_dotenv(PROJECT_ROOT / ".env")
-    print(f"已加载环境变量: {env_path}")
+    print(f"已加载环境变量：{env_path}")
 else:
-    print(f"未找到环境变量文件: {env_path}，使用系统环境变量")
+    print(f"未找到环境变量文件：{env_path}，使用系统环境变量")
 
 
 class BaseConfig(BaseModel):
     """所有配置的基类，解决命名冲突"""
+
     model_config = ConfigDict(
         protected_namespaces=(),  # 禁用命名空间保护
-        extra='ignore'  # 可选：忽略额外字段
+        extra="ignore",  # 可选：忽略额外字段
     )
+
 
 class PathConfig(BaseConfig):
     """路径配置"""
@@ -34,7 +36,7 @@ class PathConfig(BaseConfig):
     # 原始数据路径
     raw_data_db_path: Path = Field(
         default=PROJECT_ROOT / "data" / "raw_data.db",
-        description="原始数据SQLite数据库路径",
+        description="原始数据 SQLite 数据库路径",
     )
 
     # 处理数据路径
@@ -46,16 +48,17 @@ class PathConfig(BaseConfig):
         description="查询测试数据路径",
     )
 
+
 class ModelConfig(BaseConfig):
     """模型配置"""
 
-    # Embedding模型
-    embedding_model: str = Field(default="bge-m3", description="Embedding模型名称")
+    # Embedding 模型
+    embedding_model: str = Field(default="bge-m3", description="Embedding 模型名称")
     embedding_model_path: Path = Field(
-        default=PROJECT_ROOT / "models" / "bge-m3", description="Embedding模型本地路径"
+        default=PROJECT_ROOT / "models" / "bge-m3", description="Embedding 模型本地路径"
     )
     embedding_size: int = Field(
-        default=1024, description="Embedding向量维度（BGE-M3为1024）"
+        default=1024, description="Embedding 向量维度（BGE-M3 为 1024）"
     )
 
     # 重排模型
@@ -63,19 +66,23 @@ class ModelConfig(BaseConfig):
         default="bge-reranker-base", description="重排模型名称"
     )
     reranker_model_path: Optional[Path] = Field(
-        default=PROJECT_ROOT / "models" / "bge-reranker-base", description="重排模型本地路径"
+        default=PROJECT_ROOT / "models" / "bge-reranker-base",
+        description="重排模型本地路径",
     )
 
 
 class MilvusDBConfig(BaseConfig):
     """向量数据库配置"""
+
     db_path: str = Field(
         default=str(PROJECT_ROOT / "data" / "milvus_db" / "gov_pulse.db"),
-        description="Milvus数据库路径",
+        description="Milvus 数据库路径",
     )
 
     collection_name: str = Field(default="gov_cases", description="集合名称")
-    vector_dimension: int = Field(default=1024, description="向量维度（BGE-M3为1024）")
+    vector_dimension: int = Field(
+        default=1024, description="向量维度（BGE-M3 为 1024）"
+    )
     metric_type: str = Field(default="COSINE", description="相似度度量类型")
     enable_dynamic_field: bool = Field(default=True, description="是否启用动态字段")
 
@@ -88,33 +95,34 @@ class MilvusDBConfig(BaseConfig):
     search_cache_ttl: int = Field(default=300, description="搜索缓存过期时间（秒）")
 
 
+class LLMProviderConfig(BaseConfig):
+    """单个模型提供商的配置"""
+
+    provider_id: str = Field(
+        default="", description="提供商标识 (deepseek/qwen/ollama)"
+    )
+    api_key: str = Field(default="", description="API 密钥")
+    base_url: str = Field(default="", description="API 基础 URL")
+    models: Dict[str, str] = Field(
+        default_factory=dict,
+        description="模型映射 {用途：模型名称}, 如 {'generation': 'deepseek-reasoner', 'classification': 'deepseek-chat'}",
+    )
+
+
 class LLMConfig(BaseConfig):
     """大语言模型配置
 
-    支持分层模型架构：
-    - 主模型（heavy_model）：生成复杂回答，使用高性能模型（qwen-max）
-    - 轻量模型（light_model）：分类/校验等简单任务，使用轻量模型（qwen-turbo/plus）
-    - 优化模型（optimizer_model）：Prompt优化/重写（可选，与轻量模型共用）
+    支持多提供商架构：
+    - default_provider: 默认提供商 ID
+    - providers: 所有提供商配置字典
+    - 向后兼容：保留 heavy/light/optimizer_model 配置用于过渡
     """
 
-    provider: str = Field(
-        default="qwen", description="LLM提供商 (qwen/openai/azure/ollama)"
+    # 多提供商配置
+    default_provider: str = Field(default="deepseek", description="默认提供商 ID")
+    providers: Dict[str, LLMProviderConfig] = Field(
+        default_factory=dict, description="所有提供商配置字典"
     )
-    api_key: str = Field(default="", description="API密钥")
-    api_base: str = Field(default="https://dashscope.aliyuncs.com/compatible-mode/v1", description="API基础URL")
-
-    # 主模型配置 - 用于生成复杂回答
-    heavy_model_name: str = Field(default="qwen3.5-397b-a17b", description="主模型名称（生成回答）")
-
-    # 轻量模型配置 - 用于分类、校验等简单任务
-    light_model_name: str = Field(default="qwen3.5-flash", description="轻量模型名称（分类/校验）")
-    
-    optimizer_model_name: str = Field(default="qwen3.5-flash", description="轻量模型名称（分类/校验）")
-
-    # 生成参数（主模型）
-    temperature: float = Field(default=0.1, description="温度参数", ge=0.0, le=2.0)
-    max_tokens: int = Field(default=2000, description="最大生成token数")
-    top_p: float = Field(default=0.9, description="Top-p采样参数")
 
     # 上下文配置
     max_context_length: int = Field(default=4000, description="最大上下文长度")
@@ -122,16 +130,27 @@ class LLMConfig(BaseConfig):
 
     # LLM 调用次数限制
     max_llm_calls: int = Field(
-        default=20,
-        description="每轮对话最大 LLM 调用次数（防无限循环）"
+        default=20, description="每轮对话最大 LLM 调用次数（防无限循环）"
     )
-    
+
     # 工具调用配置
     max_function_call_retries: int = Field(
-        default=2,
-        description="工具调用最大尝试次数"
+        default=2, description="工具调用最大尝试次数"
     )
-    
+
+    def get_provider_config(
+        self, provider_id: Optional[str] = None
+    ) -> LLMProviderConfig:
+        """获取指定提供商配置，如果没有则返回默认提供商配置"""
+        pid = provider_id or self.default_provider
+        return self.providers[pid]
+
+    def get_model_for_purpose(
+        self, purpose: str, provider_id: Optional[str] = None
+    ) -> str:
+        """获取指定用途的模型名称"""
+        provider = self.get_provider_config(provider_id)
+        return provider.models.get(purpose, self.heavy_model_name)
 
 
 class LoggingConfig(BaseConfig):
@@ -219,36 +238,113 @@ class Settings(BaseConfig):
     """
     主配置类，聚合所有子配置
     """
+
     # 基础信息
     project_name: str = Field(default="GovPulse", description="项目名称")
     version: str = Field(default="1.0.0", description="版本号")
     debug: bool = Field(default=False, description="调试模式")
-    
+
     # 子配置
     paths: PathConfig = Field(default_factory=PathConfig, description="路径配置")
     models: ModelConfig = Field(default_factory=ModelConfig, description="模型配置")
-    vectordb: MilvusDBConfig = Field(default_factory=MilvusDBConfig, description="向量数据库配置")
-    retriever: RetrieverConfig = Field(default_factory=RetrieverConfig, description="检索器配置")
-    llm: LLMConfig = Field(default_factory=LLMConfig, description="LLM配置")
-    logging: LoggingConfig = Field(default_factory=LoggingConfig, description="日志配置")
-    performance: PerformanceConfig = Field(default_factory=PerformanceConfig, description="性能配置")
-    
-    # 动态配置（从环境变量加载）
+    vectordb: MilvusDBConfig = Field(
+        default_factory=MilvusDBConfig, description="向量数据库配置"
+    )
+    retriever: RetrieverConfig = Field(
+        default_factory=RetrieverConfig, description="检索器配置"
+    )
+    llm: LLMConfig = Field(default_factory=LLMConfig, description="LLM 配置")
+    logging: LoggingConfig = Field(
+        default_factory=LoggingConfig, description="日志配置"
+    )
+    performance: PerformanceConfig = Field(
+        default_factory=PerformanceConfig, description="性能配置"
+    )
+
+    # 从环境变量加载配置
     class Config:
         env_file = ".env"
         env_nested_delimiter = "__"
-    
+
     def __init__(self, **kwargs):
         # 在初始化前处理环境变量覆盖
         super().__init__(**kwargs)
-        
-        # 设置API密钥（从环境变量）
-        if not self.llm.api_key:
-            self.llm.api_key = os.getenv("DASHSCOPE_API_KEY", "")
-        
+
+        # 从环境变量加载多提供商配置
+        self._load_provider_configs_from_env()
+
         # 自动创建必要目录
         self._create_directories()
-    
+
+    def _load_provider_configs_from_env(self):
+        """从环境变量加载各提供商配置"""
+        providers = {}
+
+        # DeepSeek 配置
+        deepseek_api_key = os.getenv("DEEPSEEK_API_KEY", "")
+        deepseek_base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+        if deepseek_api_key:
+            providers["deepseek"] = LLMProviderConfig(
+                provider_id="deepseek",
+                api_key=deepseek_api_key,
+                base_url=deepseek_base_url,
+                models={
+                    "generation": os.getenv(
+                        "DEEPSEEK_GENERATION_MODEL", "deepseek-chat"
+                    ),
+                    "classification": os.getenv(
+                        "DEEPSEEK_CLASSIFICATION_MODEL", "deepseek-chat"
+                    ),
+                    "optimization": os.getenv(
+                        "DEEPSEEK_OPTIMIZATION_MODEL", "deepseek-chat"
+                    ),
+                },
+            )
+
+        # Qwen 配置
+        qwen_api_key = os.getenv("QWEN_API_KEY", "")
+        qwen_base_url = os.getenv(
+            "QWEN_BASE_URL", "https://dashscope.aliyuncs.com/api/v1"
+        )
+        if qwen_api_key:
+            providers["qwen"] = LLMProviderConfig(
+                provider_id="qwen",
+                api_key=qwen_api_key,
+                base_url=qwen_base_url,
+                models={
+                    "generation": os.getenv("QWEN_GENERATION_MODEL", "qwen-max"),
+                    "classification": os.getenv(
+                        "QWEN_CLASSIFICATION_MODEL", "qwen-plus"
+                    ),
+                    "optimization": os.getenv("QWEN_OPTIMIZATION_MODEL", "qwen-plus"),
+                },
+            )
+
+        # Ollama 配置（本地部署，api_key 可为空）
+        ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        ollama_api_key = os.getenv(
+            "OLLAMA_API_KEY", "ollama"
+        )  # Ollama 通常不需要 API Key
+        providers["ollama"] = LLMProviderConfig(
+            provider_id="ollama",
+            api_key=ollama_api_key,
+            base_url=ollama_base_url,
+            models={
+                "generation": os.getenv("OLLAMA_GENERATION_MODEL", "qwen2.5:7b"),
+                "classification": os.getenv(
+                    "OLLAMA_CLASSIFICATION_MODEL", "qwen2.5:3b"
+                ),
+                "optimization": os.getenv("OLLAMA_OPTIMIZATION_MODEL", "qwen2.5:7b"),
+            },
+        )
+
+        # 设置默认提供商
+        if not self.llm.default_provider:
+            self.llm.default_provider = os.getenv("LLM_DEFAULT_PROVIDER", "deepseek")
+
+        # 合并配置, 从环境变量加载的配置优先
+        self.llm.providers = {**self.llm.providers, **providers}
+
     def _create_directories(self):
         """创建必要的目录结构"""
         dirs_to_create = [
@@ -257,46 +353,52 @@ class Settings(BaseConfig):
             self.paths.log_dir,
             self.paths.cache_dir,
             self.paths.processed_data_dir,
-            self.logging.file_path.parent
+            self.logging.file_path.parent,
         ]
-        
+
         for directory in dirs_to_create:
             if isinstance(directory, Path):
                 directory.mkdir(parents=True, exist_ok=True)
 
 
-# 实例化配置对象 (单例模式)
+# 单例模式
 settings = Settings()
 
 # 调试代码：直接运行 python app/core/config.py 可以检查路径对不对
 if __name__ == "__main__":
     print("=" * 60)
-    print(f"项目名称: {settings.project_name} v{settings.version}")
+    print(f"项目名称：{settings.project_name} v{settings.version}")
     print("=" * 60)
-    
+
     # 显示关键路径
     print("\n📁 关键路径:")
-    print(f"  项目根目录: {settings.paths.project_root}")
-    print(f"  数据目录: {settings.paths.data_dir}")
-    print(f"  模型目录: {settings.paths.model_dir}")
-    print(f"  日志目录: {settings.paths.log_dir}")
-    
+    print(f"  项目根目录：{settings.paths.project_root}")
+    print(f"  数据目录：{settings.paths.data_dir}")
+    print(f"  模型目录：{settings.paths.model_dir}")
+    print(f"  日志目录：{settings.paths.log_dir}")
+
     # 显示模型配置
     print("\n🤖 模型配置:")
-    print(f"  Embedding模型: {settings.models.embedding_model}")
-    print(f"  模型路径: {settings.models.embedding_model_path}")
-    print(f"  LLM提供商: {settings.llm.provider}")
-    print(f"  LLM模型: {settings.llm.model_name}")
-    
+    print(f"  Embedding 模型：{settings.models.embedding_model}")
+    print(f"  模型路径：{settings.models.embedding_model_path}")
+
     # 显示向量数据库配置
     print("\n🗄️ 向量数据库配置:")
-    print(f"  集合名称: {settings.vectordb.collection_name}")
-    print(f"  向量维度: {settings.vectordb.vector_dimension}")
-    
+    print(f"  集合名称：{settings.vectordb.collection_name}")
+    print(f"  向量维度：{settings.vectordb.vector_dimension}")
+
     # 显示检索器配置
     print("\n🔍 检索器配置:")
-    print(f"  阈值策略: {settings.retriever.threshold_strategy}")
-    print(f"  最小相似度阈值: {settings.retriever.min_similarity}")
-    print(f"  重排权重: S={settings.retriever.weight_similarity}, "
-          f"R={settings.retriever.weight_recency}, "
-          f"L={settings.retriever.weight_length}")
+    print(f"  阈值策略：{settings.retriever.threshold_strategy}")
+    print(f"  最小相似度阈值：{settings.retriever.min_similarity}")
+    print(
+        f"  重排权重：S={settings.retriever.weight_similarity}, "
+        f"R={settings.retriever.weight_recency}, "
+        f"L={settings.retriever.weight_length}"
+    )
+
+    # 显示 LLM 提供商配置
+    print("\n🤖 LLM 提供商配置:")
+    print(f"  默认提供商：{settings.llm.default_provider}")
+    for provider_id, provider_config in settings.llm.providers.items():
+        print(f"  - {provider_id}: {provider_config.models}")

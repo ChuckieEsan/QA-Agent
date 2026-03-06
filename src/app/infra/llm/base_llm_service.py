@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional, Union, TypeVar, Generic, Dict, Any, Type
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 from langchain_core.messages import BaseMessage
+from src.app.infra.llm.providers.base_provider import BaseLLMProvider
+from src.config.setting import LLMProviderConfig
 
 # 定义消息类型的联合，支持字典或 LangChain 消息对象
 MessageType = Union[Dict[str, str], BaseMessage]
@@ -15,7 +17,19 @@ class BaseLLMService(ABC):
 
     提供统一的文本生成和结构化输出接口，支持同步和异步调用。
     所有具体实现必须实现抽象方法。
+
+    支持通过 LLMConfig 配置模型参数，具体实现类应在 __init__ 中接收配置并初始化底层客户端。
     """
+
+    def __init__(self, provider: BaseLLMProvider, **kwargs):
+        """
+        初始化 LLM 服务
+
+        Args:
+            config: 模型配置对象，包含连接参数和默认生成参数
+            **kwargs: 额外的配置参数，可覆盖 config 中的值
+        """
+        self._provider = provider
 
     # 通用文本生成
     @abstractmethod
@@ -54,7 +68,7 @@ class BaseLLMService(ABC):
         """异步版本 generate"""
         pass
 
-    # 结构化输出（基于 Pydantic 模型或 JSON Schema）
+    # 结构化输出
     @abstractmethod
     def generate_structured(
         self,

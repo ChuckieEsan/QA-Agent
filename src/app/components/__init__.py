@@ -9,16 +9,10 @@ from src.app.components.retrievers import (
     HybridVectorRetriever,
 )
 
-# 生成器组件
-from src.app.components.generators import (
-    BaseGenerator,
-    LLMGenerator,
-)
-
 # 分类器组件
 from src.app.components.classifier import (
     BaseClassifier,
-    GovClassifier,
+    GovRequestClassifier,
     GovRequestType,
 )
 
@@ -39,13 +33,9 @@ __all__ = [
     "BaseRetriever",
     "HybridVectorRetriever",
 
-    # 生成器
-    "BaseGenerator",
-    "LLMGenerator",
-
     # 分类器
     "BaseClassifier",
-    "GovClassifier",
+    "GovRequestClassifier",
     "GovRequestType",
 
     # 记忆
