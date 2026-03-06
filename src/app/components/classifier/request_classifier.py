@@ -43,7 +43,7 @@ class GovRequestClassifier(BaseClassifier):
             f"RequestClassifier 初始化完成（使用轻量模型: {self.llm_service._model_name}）"
         )
 
-    def classify_request(self, text: str) -> GovRequestClassifiedResult:
+    def classify(self, text: str) -> GovRequestClassifiedResult:
         """
         分类问政请求
 

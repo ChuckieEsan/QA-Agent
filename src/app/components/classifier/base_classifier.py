@@ -52,7 +52,7 @@ class BaseClassifier(ABC):
     """
 
     @abstractmethod
-    def classify_request(
+    def classify(
         self,
         text: str,
     ) -> GovRequestClassifiedResult:
