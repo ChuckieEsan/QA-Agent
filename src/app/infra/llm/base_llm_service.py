@@ -1,84 +1,94 @@
-"""
-LLM 服务抽象基类
-定义统一的 LLM 服务接口
-"""
-
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, AsyncGenerator, Any
+from typing import List, Optional, Union, TypeVar, Generic, Dict, Any, Type
+from pydantic import BaseModel
+from langchain_core.messages import BaseMessage
 
+# 定义消息类型的联合，支持字典或 LangChain 消息对象
+MessageType = Union[Dict[str, str], BaseMessage]
+
+# 泛型变量，表示结构化输出的类型
+T = TypeVar('T', bound=BaseModel)
 
 class BaseLLMService(ABC):
     """
     LLM 服务抽象基类
 
-    所有 LLM 服务实现都应该继承此类
+    提供统一的文本生成和结构化输出接口，支持同步和异步调用。
+    所有具体实现必须实现抽象方法。
     """
 
+    # 通用文本生成
     @abstractmethod
-    async def analyze_query_intent(
+    def generate(
         self,
-        query: str,
-        history: Optional[List[Dict]] = None
-    ) -> Any:  # AgentDecision
+        messages: List[MessageType],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
+        **kwargs
+    ) -> str:
         """
-        分析查询意图
+        生成文本响应（同步）
 
         Args:
-            query: 用户查询
-            history: 对话历史（可选）
+            messages: 消息列表，每条可以是 {"role": "user", "content": "..."} 或 BaseMessage 对象
+            temperature: 采样温度，默认 None 使用模型默认值
+            max_tokens: 最大生成 token 数
+            top_p: 核采样参数
+            **kwargs: 其他模型参数
 
         Returns:
-            AgentDecision 决策结果
+            生成的文本内容
         """
         pass
 
     @abstractmethod
-    async def generate_response(
+    async def agenerate(
         self,
-        query: str,
-        context: str,
-        history: Optional[List[Dict]] = None,
-        decision: Optional[Any] = None,  # AgentDecision
-        stream: bool = False
-    ) -> Dict[str, Any]:
+        messages: List[MessageType],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
+        **kwargs
+    ) -> str:
+        """异步版本 generate"""
+        pass
+
+    # 结构化输出（基于 Pydantic 模型或 JSON Schema）
+    @abstractmethod
+    def generate_structured(
+        self,
+        messages: List[MessageType],
+        response_model: Type[T],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> T:
         """
-        生成回答
+        生成符合 Pydantic 模型的结构化输出（同步）
+
+        底层使用函数调用或 response_format 强制模型返回 JSON，并自动解析为模型实例。
 
         Args:
-            query: 用户查询
-            context: 检索上下文
-            history: 对话历史（可选）
-            decision: Agent 决策（可选）
-            stream: 是否流式生成
+            messages: 消息列表
+            response_model: Pydantic 模型类，用于定义输出格式
+            temperature: 采样温度
+            max_tokens: 最大生成 token 数
+            **kwargs: 其他参数
 
         Returns:
-            生成结果字典
+            response_model 的实例，已通过 Pydantic 验证
         """
         pass
 
     @abstractmethod
-    async def validate_answer_quality(
+    async def agenerate_structured(
         self,
-        answer: str,
-        query: str,
-        context: str
-    ) -> Dict[str, Any]:
-        """
-        验证回答质量
-
-        Args:
-            answer: 生成的回答
-            query: 用户查询
-            context: 检索上下文
-
-        Returns:
-            质量校验结果
-        """
-        pass
-
-    @abstractmethod
-    async def initialize(self) -> None:
-        """
-        初始化 LLM 服务资源
-        """
+        messages: List[MessageType],
+        response_model: Type[T],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> T:
+        """异步版本 generate_structured"""
         pass
