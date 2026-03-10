@@ -25,7 +25,7 @@ from src.app.components.memory import (
 # 质量校验组件
 from src.app.components.quality import (
     BaseValidator,
-    AnswerValidator,
+    GovAnswerValidator,
 )
 
 __all__ = [
@@ -44,5 +44,5 @@ __all__ = [
 
     # 质量校验
     "BaseValidator",
-    "AnswerValidator",
+    "GovAnswerValidator",
 ]

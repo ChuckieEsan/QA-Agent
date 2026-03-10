@@ -4,9 +4,9 @@
 """
 
 from src.app.components.quality.base_validator import BaseValidator
-from src.app.components.quality.answer_validator import AnswerValidator
+from src.app.components.quality.answer_validator import GovAnswerValidator
 
 __all__ = [
     "BaseValidator",
-    "AnswerValidator",
+    "GovAnswerValidator",
 ]

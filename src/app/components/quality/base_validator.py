@@ -39,10 +39,3 @@ class BaseValidator(ABC):
             - suggestion: 优化建议（可选）
         """
         pass
-
-    @abstractmethod
-    async def initialize(self) -> None:
-        """
-        初始化验证器资源
-        """
-        pass

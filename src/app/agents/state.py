@@ -1,72 +1,66 @@
-"""
-State 定义 - 政务问答 Agent 的共享状态
+"""Agent 状态定义 - 基于 LangGraph 的状态管理"""
 
-使用 TypedDict 定义全局共享状态，所有 Node 通过修改 State 来实现数据流转
-"""
-
-from typing import TypedDict, List, Dict, Any, Optional, Annotated
-from dataclasses import dataclass, field
+from typing import TypedDict, List, Optional, Dict, Any
+from enum import Enum
 
 
-class AppealState(TypedDict, total=False):
+class ProcessStatus(str, Enum):
+    """处理状态枚举"""
+    PENDING = "pending"
+    PREPROCESSED = "preprocessed"
+    TOOLS_CALLED = "tools_called"
+    FUSED = "fused"
+    GENERATED = "generated"
+    VALIDATED = "validated"
+    COMPLETED = "completed"
+    WORK_ORDER_CREATED = "work_order_created"
+    FAILED = "failed"
+
+
+class AgentState(TypedDict):
     """
-    工单状态 - 对应 README 中的标准化工单
+    Agent 状态定义
 
-    使用 TypedDict 定义，支持:
-    - raw_query: 原始诉求
-    - cleaned_query: 清洗后的诉求
-    - desensitized_query: 脱敏后的诉求
-    - extracted_elements: 提取的要素
-    - appeal_type: 诉求类型
-    - urgency_level: 紧急程度
-    - department: 办理部门
-    - is_invalid: 是否无效诉求
-    - retrieval_results: 检索结果
-    - generated_answer: 生成的回答
-    - validation_result: 验证结果
-    - final_response: 最终回复
-    - error_message: 错误信息
-    - current_step: 当前步骤
+    包含整个处理流程中各阶段的数据
     """
-    # 输入
-    raw_query: str
+    # 原始输入
+    original_query: str
 
     # 预处理阶段
     cleaned_query: str
-    desensitized_query: str
-    extracted_elements: Dict[str, Any]
+    classification: Optional[Dict[str, Any]]  # 类型、紧急度
+    political_elements: Optional[Dict[str, Any]]  # 五大核心要素
 
-    # 分类阶段
-    appeal_type: str
-    urgency_level: str
-    department: str
-    is_invalid: bool
+    # 工具调用阶段
+    tool_results: List[Dict[str, Any]]  # 工具返回结果
+    retrieved_knowledge: List[Dict[str, Any]]  # 检索到的知识
 
-    # 检索阶段
-    retrieval_results: List[Dict[str, Any]]
+    # 知识融合阶段
+    fused_context: str  # 融合后的上下文
 
     # 生成阶段
-    generated_answer: str
+    generated_response: str
 
     # 验证阶段
-    validation_result: Dict[str, Any]
-
-    # 输出
-    final_response: str
+    confidence_score: float  # 置信度
 
     # 元数据
-    error_message: str
-    current_step: str
+    status: ProcessStatus
+    error_message: Optional[str]
 
 
-# 简化的消息类型定义
-Messages = List[Dict[str, Any]]
-
-
-@dataclass
-class ProcessingResult:
-    """处理结果数据类"""
-    success: bool
-    data: Optional[Any] = None
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+def create_initial_state(query: str) -> AgentState:
+    """创建初始状态"""
+    return {
+        "original_query": query,
+        "cleaned_query": "",
+        "classification": None,
+        "political_elements": None,
+        "tool_results": [],
+        "retrieved_knowledge": [],
+        "fused_context": "",
+        "generated_response": "",
+        "confidence_score": 0.0,
+        "status": ProcessStatus.PENDING,
+        "error_message": None,
+    }

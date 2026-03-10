@@ -1,0 +1,151 @@
+# 网络问政 MCP 服务配置
+# 上传到 Nacos 后，Gateway 会自动加载并注册这些工具
+# Data ID: gov-service-mock-mcp.yml
+# Group: DEFAULT_GROUP
+
+agent:
+  tools:
+    # ==========================================
+    # 场景 1: 创建工单 (由 Agent 调用)
+    # ==========================================
+    - name: "create_gov_work_order"
+      description: "创建政务工单。用户提交诉求后，AI Agent 调用此接口创建工单。需提供用户信息、工单标题、详细描述、涉及部门等信息。"
+      type: "DUBBO"
+      inputSchema: '{
+        "type": "object",
+        "properties": {
+          "orderData": {
+            "type": "object",
+            "description": "工单详细数据",
+            "properties": {
+              "userId": {"type": "string", "description": "提交人ID"},
+              "userPhone": {"type": "string", "description": "联系方式"},
+              "title": {"type": "string", "description": "工单标题"},
+              "content": {"type": "string", "description": "详细描述"},
+              "department": {"type": "string", "description": "责任部门"},
+              "elements": {
+                "type": "object",
+                "description": "五大核心要素",
+                "properties": {
+                  "time": {"type": "string", "description": "时间"},
+                  "location": {"type": "string", "description": "地点"},
+                  "event": {"type": "string", "description": "核心事件"},
+                  "goal": {"type": "string", "description": "诉求目标"},
+                  "subjects": {"type": "array", "description": "涉及主体", "items": {"type": "string"}}
+                }
+              }
+            },
+            "required":["userId", "userPhone", "title", "content"]
+          }
+        },
+        "required": ["orderData"]
+      }'
+      metadata:
+        interface: "com.gov.mock.service.WorkOrderService"
+        method: "createWorkOrder"
+        group: "gov-political"
+        version: "1.0.0"
+        paramTypes:
+          - "java.util.Map"
+        paramNames:
+          - "orderData"
+
+    # ==========================================
+    # 场景 2: 查询工单详情
+    # ==========================================
+    - name: "query_gov_work_order"
+      description: "根据工单ID查询政务工单详情。返回工单的基本信息、当前状态、处理进度等。"
+      type: "DUBBO"
+      inputSchema: '{
+        "type": "object",
+        "properties": {
+          "orderId": {"type": "string", "description": "工单唯一编号"}
+        },
+        "required": ["orderId"]
+      }'
+      metadata:
+        interface: "com.gov.mock.service.WorkOrderService"
+        method: "queryWorkOrder"
+        group: "gov-political"
+        version: "1.0.0"
+        paramTypes:
+          - "java.lang.String"
+        paramNames:
+          - "orderId"
+
+    # ==========================================
+    # 场景 3: 工单流转处理
+    # ==========================================
+    - name: "process_gov_work_order"
+      description: "工单流转处理。职能部门处理工单，包括：\n- ASSIGN: 分拨（将工单分拨给具体部门）\n- ACCEPT: 受理（部门确认接收并开始处理）\n- REPLY: 回复（处理完成后回复用户）"
+      type: "DUBBO"
+      inputSchema: '{
+        "type": "object",
+        "properties": {
+          "orderId": {"type": "string", "description": "工单唯一编号"},
+          "action": {
+            "type": "string",
+            "description": "操作类型",
+            "enum": ["ASSIGN", "ACCEPT", "REPLY"]
+          },
+          "payload": {
+            "type": "object",
+            "description": "操作数据",
+            "properties": {
+              "department": {"type": "string", "description": "分拨部门(ASSIGN时必填)"},
+              "handler": {"type": "string", "description": "经办人"},
+              "replyContent": {"type": "string", "description": "回复内容(REPLY时必填)"}
+            }
+          }
+        },
+        "required":["orderId", "action", "payload"]
+      }'
+      metadata:
+        interface: "com.gov.mock.service.WorkOrderService"
+        method: "processWorkOrder"
+        group: "gov-political"
+        version: "1.0.0"
+        paramTypes:
+          - "java.lang.String"
+          - "com.gov.mock.enums.WorkOrderAction"
+          - "java.util.Map"
+        paramNames:
+          - "orderId"
+          - "action"
+          - "payload"
+
+    # ==========================================
+    # 场景 4: 提交用户评价
+    # ==========================================
+    - name: "submit_work_order_feedback"
+      description: "用户提交评价。工单处理完成后，用户可以对处理结果进行评价，包括：时效评分、态度评分、结果评分（1-5分）以及文字评价。"
+      type: "DUBBO"
+      inputSchema: '{
+        "type": "object",
+        "properties": {
+          "orderId": {"type": "string", "description": "工单唯一编号"},
+          "feedbackData": {
+            "type": "object",
+            "description": "评价数据",
+            "properties": {
+              "timeliness": {"type": "integer", "description": "受理时效评分(1-5分)", "minimum": 1, "maximum": 5},
+              "attitude": {"type": "integer", "description": "办理态度评分(1-5分)", "minimum": 1, "maximum": 5},
+              "result": {"type": "integer", "description": "处理结果评分(1-5分)", "minimum": 1, "maximum": 5},
+              "comment": {"type": "string", "description": "文字评价"}
+            },
+            "required": ["timeliness", "attitude", "result"]
+          }
+        },
+        "required": ["orderId", "feedbackData"]
+      }'
+      metadata:
+        interface: "com.gov.mock.service.WorkOrderService"
+        method: "submitFeedback"
+        group: "gov-political"
+        version: "1.0.0"
+        paramTypes:
+          - "java.lang.String"
+          - "java.util.Map"
+        paramNames:
+          - "orderId"
+          - "feedbackData"

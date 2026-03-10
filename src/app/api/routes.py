@@ -9,7 +9,8 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import asyncio
 
-from src.app.agents.langgraph import ainvoke
+from src.app.agents import ainvoke
+from src.app.agents.state import ProcessStatus
 from src.app.infra.utils.logger import get_logger
 from src.app.infra.db.milvus_db import MilvusDBClient
 
@@ -99,30 +100,42 @@ async def chat(request: ChatRequest):
     try:
         logger.info(f"💬 收到聊天请求: {request.query[:30]}...")
 
-        # 调用 LangGraph MVP 工作流
+        # 调用 LangGraph MultiAgent 工作流
         state = await ainvoke(request.query)
+
+        # 从新状态结构中提取数据
+        classification = state.get("classification", {})
+        status = state.get("status", ProcessStatus.PENDING)
+
+        # 根据状态确定回答
+        if status == ProcessStatus.WORK_ORDER_CREATED:
+            answer = "您的诉求已收到，由于需要人工核实处理，我们已为您创建工单，稍后会有工作人员与您联系。"
+        else:
+            answer = state.get("generated_response", "")
+
+        # 转换检索结果
+        sources = []
+        for i, source in enumerate(state.get("retrieved_knowledge", [])):
+            sources.append(SourceItem(
+                rank=i + 1,
+                similarity=source.get("similarity", 0.0),
+                department=source.get("department", "未知部门"),
+                title=source.get("title", "无标题"),
+                time=source.get("time", "未知时间"),
+                composite_score=source.get("composite_score", 0.0),
+            ))
 
         # 构建响应
         response = ChatResponse(
-            answer=state.get("final_response", ""),
+            answer=answer,
             classification={
-                "type": state.get("appeal_type", "未知"),
-                "urgency_level": state.get("urgency_level", "一般"),
-                "department": state.get("department", "未知"),
+                "type": classification.get("request_type", "未知"),
+                "urgency_level": classification.get("request_urgency", "一般"),
+                "status": status.value if isinstance(status, ProcessStatus) else str(status),
             },
-            sources=[
-                SourceItem(
-                    rank=i + 1,
-                    similarity=source.get("similarity", 0.0),
-                    department=source.get("department", "未知部门"),
-                    title=source.get("title", "无标题"),
-                    time=source.get("time", "未知时间"),
-                    composite_score=source.get("composite_score", 0.0),
-                )
-                for i, source in enumerate(state.get("retrieval_results", []))
-            ],
-            quality_score=state.get("validation_result", {}).get("overall_score", 0.0),
-            retrieval_time=state.get("retrieval_metadata", {}).get("retrieval_time", 0.0),
+            sources=sources,
+            quality_score=state.get("confidence_score", 0.0),
+            retrieval_time=0.0,
             steps=1,
             timestamp=datetime.now().isoformat(),
         )

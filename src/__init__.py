@@ -17,8 +17,11 @@ from src.app.components import (
     BaseRetriever,
     HybridVectorRetriever,
     BaseValidator,
-    AnswerValidator,
+    GovAnswerValidator,
 )
+
+# 设置别名以保持兼容性
+AnswerValidator = GovAnswerValidator
 
 # 数据库客户端
 from src.app.infra.db.milvus_db import (
@@ -49,6 +52,7 @@ __all__ = [
     "BaseRetriever",
     "HybridVectorRetriever",
     "BaseValidator",
+    "GovAnswerValidator",
     "AnswerValidator",
 
     # 数据库
