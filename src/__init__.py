@@ -23,6 +23,19 @@ from src.app.components import (
 # 设置别名以保持兼容性
 AnswerValidator = GovAnswerValidator
 
+# Agent 层
+from src.app.agents import (
+    run_agent,
+    ainvoke,
+    invoke,
+    agent_graph,
+    AgentState,
+    ProcessStatus,
+    create_initial_state,
+    get_available_tools,
+    ToolRegistry,
+)
+
 # 数据库客户端
 from src.app.infra.db.milvus_db import (
     MilvusDBClient,
@@ -54,6 +67,17 @@ __all__ = [
     "BaseValidator",
     "GovAnswerValidator",
     "AnswerValidator",
+
+    # Agent
+    "run_agent",
+    "ainvoke",
+    "invoke",
+    "agent_graph",
+    "AgentState",
+    "ProcessStatus",
+    "create_initial_state",
+    "get_available_tools",
+    "ToolRegistry",
 
     # 数据库
     "MilvusDBClient",
