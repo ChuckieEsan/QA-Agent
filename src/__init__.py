@@ -39,8 +39,6 @@ from src.app.agents import (
 # 数据库客户端
 from src.app.infra.db.milvus_db import (
     MilvusDBClient,
-    get_milvus_client,
-    get_milvus_client_from_config,
 )
 
 # 配置
