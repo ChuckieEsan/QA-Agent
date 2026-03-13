@@ -45,7 +45,6 @@ class MilvusDBClient(BaseDBClient):
         # 使用传入的配置或默认配置
         self.config = config or {
             "db_path": str(settings.vectordb.db_path),
-            "collection_name": settings.vectordb.collection_name,
             "vector_dimension": settings.vectordb.vector_dimension,
             "metric_type": settings.vectordb.metric_type,
             "enable_dynamic_field": settings.vectordb.enable_dynamic_field,
@@ -53,7 +52,6 @@ class MilvusDBClient(BaseDBClient):
 
         super().__init__(self.config)
         self.db_path: str = self.config.get("db_path")
-        self.collection_name: str = self.config.get("collection_name")
         self.vector_dimension: int = self.config.get("vector_dimension", 1024)
         self.metric_type: str = self.config.get("metric_type", "COSINE")
         self.enable_dynamic_field: bool = self.config.get("enable_dynamic_field", True)
@@ -116,63 +114,64 @@ class MilvusDBClient(BaseDBClient):
 
     # ==================== 集合管理方法 ====================
 
-    def _ensure_collection_exists(self) -> None:
+    def _ensure_collection_exists(self, collection_name: str) -> None:
         """
         确保集合存在，不存在则创建
         """
         try:
             # 检查集合是否存在
-            if not self._client.has_collection(self.collection_name):
-                logger.info(f"🔨 集合 {self.collection_name} 不存在，正在创建...")
+            if not self._client.has_collection(collection_name):
+                logger.info(f"🔨 集合 {collection_name} 不存在，正在创建...")
 
                 # 创建集合
                 self._client.create_collection(
-                    collection_name=self.collection_name,
+                    collection_name=collection_name,
                     dimension=self.vector_dimension,
                     metric_type=self.metric_type,
                     auto_id=True,
                     enable_dynamic_field=self.enable_dynamic_field,
                 )
 
-                logger.info(f"✅ 集合 {self.collection_name} 创建成功")
+                logger.info(f"✅ 集合 {collection_name} 创建成功")
             else:
-                logger.info(f"✅ 集合 {self.collection_name} 已存在")
+                logger.info(f"✅ 集合 {collection_name} 已存在")
 
         except Exception as e:
             logger.error(f"❌ 集合管理失败: {e}")
             raise
 
-    def has_collection(self) -> bool:
+    def has_collection(self, collection_name: str) -> bool:
         """
         检查集合是否存在
 
         Returns:
             bool: 集合是否存在
         """
-        return self._client.has_collection(self.collection_name)
+        return self._client.has_collection(collection_name)
 
-    def drop_collection(self) -> None:
+    def drop_collection(self, collection_name: str) -> None:
         """
         删除集合
         """
-        if self._client.has_collection(self.collection_name):
-            logger.warning(f"🗑️ 正在删除集合 {self.collection_name}")
-            self._client.drop_collection(self.collection_name)
-            logger.info(f"✅ 集合 {self.collection_name} 已删除")
+        if self._client.has_collection(collection_name):
+            logger.warning(f"🗑️ 正在删除集合 {collection_name}")
+            self._client.drop_collection(collection_name)
+            logger.info(f"✅ 集合 {collection_name} 已删除")
 
-    def describe_collection(self) -> Dict:
+    def describe_collection(self, collection_name) -> Dict:
         """
         获取集合详细信息
 
         Returns:
             Dict: 集合的详细信息
         """
-        return self._client.describe_collection(self.collection_name)
+        return self._client.describe_collection(collection_name)
 
     # ==================== 数据操作方法 ====================
 
     def insert(
         self,
+        collection_name: str,
         data: List[Dict],
         batch_size: Optional[int] = None
     ) -> Dict:
@@ -180,28 +179,19 @@ class MilvusDBClient(BaseDBClient):
         插入数据到集合
 
         Args:
+            collection_name: 集合名称
             data: 要插入的数据列表，每个元素是包含向量和元数据的字典
             batch_size: 批量插入大小（可选）
 
         Returns:
             Dict: 插入结果，包含插入的 IDs
-
-        Example:
-            >>> client.insert([
-            ...     {
-            ...         "vector": [0.1, 0.2, ..., 0.3],
-            ...         "text": "示例文本",
-            ...         "department": "部门名称",
-            ...         "metadata": {"title": "标题", "time": "2024-01-01"}
-            ...     }
-            ... ])
         """
         try:
-            logger.info(f"📥 向集合 {self.collection_name} 插入 {len(data)} 条数据")
+            logger.info(f"📥 向集合 {collection_name} 插入 {len(data)} 条数据")
 
             # 执行插入
             result = self._client.insert(
-                collection_name=self.collection_name,
+                collection_name=collection_name,
                 data=data,
                 batch_size=batch_size
             )
@@ -215,6 +205,7 @@ class MilvusDBClient(BaseDBClient):
 
     def search(
         self,
+        collection_name: str,
         vectors: List[List[float]],
         top_k: int = 5,
         output_fields: Optional[List[str]] = None,
@@ -225,6 +216,7 @@ class MilvusDBClient(BaseDBClient):
         向量相似度搜索
 
         Args:
+            collection_name: 集合名称
             vectors: 查询向量列表
             top_k: 返回结果数量
             output_fields: 要返回的字段列表
@@ -234,17 +226,11 @@ class MilvusDBClient(BaseDBClient):
         Returns:
             List[List[Dict]]: 搜索结果列表
 
-        Example:
-            >>> results = client.search(
-            ...     vectors=[[0.1, 0.2, ..., 0.3]],
-            ...     top_k=5,
-            ...     output_fields=["text", "department", "metadata"]
-            ... )
         """
         try:
             # 执行搜索
             results = self._client.search(
-                collection_name=self.collection_name,
+                collection_name=collection_name,
                 data=vectors,
                 limit=top_k,
                 output_fields=output_fields or ["*"],
@@ -260,6 +246,7 @@ class MilvusDBClient(BaseDBClient):
 
     def query(
         self,
+        collection_name: str,
         filter_expr: str,
         output_fields: Optional[List[str]] = None,
         limit: int = 10
@@ -268,6 +255,7 @@ class MilvusDBClient(BaseDBClient):
         条件查询（非向量搜索）
 
         Args:
+            collection_name: 集合名称
             filter_expr: 过滤表达式
             output_fields: 要返回的字段列表
             limit: 返回结果数量限制
@@ -277,7 +265,7 @@ class MilvusDBClient(BaseDBClient):
         """
         try:
             results = self._client.query(
-                collection_name=self.collection_name,
+                collection_name=collection_name,
                 filter=filter_expr,
                 output_fields=output_fields or ["*"],
                 limit=limit
@@ -290,12 +278,14 @@ class MilvusDBClient(BaseDBClient):
 
     def delete(
         self,
+        collection_name: str,
         filter_expr: str
     ) -> Dict:
         """
         根据过滤条件删除数据
 
         Args:
+            collection_name: 集合名称
             filter_expr: 过滤表达式
 
         Returns:
@@ -304,7 +294,7 @@ class MilvusDBClient(BaseDBClient):
         try:
             logger.info(f"🗑️ 删除满足条件的数据: {filter_expr}")
             result = self._client.delete(
-                collection_name=self.collection_name,
+                collection_name=collection_name,
                 filter=filter_expr
             )
             logger.info(f"✅ 删除完成: {result}")
@@ -316,6 +306,7 @@ class MilvusDBClient(BaseDBClient):
 
     def upsert(
         self,
+        collection_name: str,
         data: List[Dict],
         batch_size: Optional[int] = None
     ) -> Dict:
@@ -323,6 +314,7 @@ class MilvusDBClient(BaseDBClient):
         更新或插入数据（如果主键存在则更新，否则插入）
 
         Args:
+            collection_name: 集合名称
             data: 要更新或插入的数据列表
             batch_size: 批量处理大小（可选）
 
@@ -332,7 +324,7 @@ class MilvusDBClient(BaseDBClient):
         try:
             logger.info(f"🔄 更新/插入 {len(data)} 条数据")
             result = self._client.upsert(
-                collection_name=self.collection_name,
+                collection_name=collection_name,
                 data=data,
                 batch_size=batch_size
             )
@@ -345,34 +337,38 @@ class MilvusDBClient(BaseDBClient):
 
     # ==================== 统计信息方法 ====================
 
-    def get_collection_stats(self) -> Dict:
+    def get_collection_stats(self, collection_name: str) -> Dict:
         """
         获取集合统计信息
+        
+        Args:
+            collection_name: 集合名称
 
         Returns:
             Dict: 集合的统计信息
         """
         try:
-            stats = self._client.get_collection_stats(self.collection_name)
+            stats = self._client.get_collection_stats(collection_name)
             return stats
         except Exception as e:
             logger.error(f"❌ 获取统计信息失败: {e}")
             raise
 
-    def get_entity_count(self) -> int:
+    def get_entity_count(self, collection_name: str) -> int:
         """
         获取集合中的实体数量
 
         Returns:
             int: 实体数量
         """
-        stats = self.get_collection_stats()
+        stats = self.get_collection_stats(collection_name)
         return stats.get("row_count", 0)
 
     # ==================== 工具方法 ====================
 
     def create_index(
         self,
+        collection_name: str,
         field_name: str = "vector",
         index_type: str = "AUTOINDEX",
         metric_type: Optional[str] = None,
@@ -382,6 +378,7 @@ class MilvusDBClient(BaseDBClient):
         创建索引（Milvus Lite 通常自动创建）
 
         Args:
+            collection_name: 集合名称
             field_name: 字段名称
             index_type: 索引类型
             metric_type: 度量类型
@@ -390,7 +387,7 @@ class MilvusDBClient(BaseDBClient):
         try:
             logger.info(f"🔨 为字段 {field_name} 创建索引")
             self._client.create_index(
-                collection_name=self.collection_name,
+                collection_name=collection_name,
                 field_name=field_name,
                 index_type=index_type,
                 metric_type=metric_type or self.metric_type,
@@ -401,13 +398,16 @@ class MilvusDBClient(BaseDBClient):
             logger.error(f"❌ 创建索引失败: {e}")
             raise
 
-    def load_collection(self) -> None:
+    def load_collection(self, collection_name) -> None:
         """
-        加载集合到内存（Milvus Lite 通常自动加载）
+        加载集合到内存
+        
+        Args:
+            collection_name: 集合名称
         """
         try:
-            logger.info(f"💾 加载集合 {self.collection_name} 到内存")
-            self._client.load_collection(self.collection_name)
+            logger.info(f"💾 加载集合 {collection_name} 到内存")
+            self._client.load_collection(collection_name)
             logger.info(f"✅ 集合加载成功")
         except Exception as e:
             logger.error(f"❌ 加载集合失败: {e}")
@@ -460,7 +460,7 @@ if __name__ == "__main__":
     client = get_milvus_client()
 
     # 获取统计信息
-    count = client.get_entity_count()
+    count = client.get_entity_count("gov_cases")
     logger.info(f"📊 集合中现有数据量: {count}")
 
     # 示例2: 使用上下文管理器
@@ -470,12 +470,11 @@ if __name__ == "__main__":
 
     config = {
         "db_path": str(settings.vectordb.db_path),
-        "collection_name": settings.vectordb.collection_name,
         "vector_dimension": settings.vectordb.vector_dimension,
     }
 
     with MilvusDBClient(config) as client_ctx:
-        stats = client_ctx.get_collection_stats()
+        stats = client_ctx.get_collection_stats("gov_cases")
         logger.info(f"📊 集合统计信息: {stats}")
 
     logger.info("\n✅ 示例运行完成")

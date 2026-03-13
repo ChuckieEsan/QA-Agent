@@ -79,7 +79,8 @@ class MilvusDBConfig(BaseConfig):
         description="Milvus 数据库路径",
     )
 
-    collection_name: str = Field(default="gov_cases", description="集合名称")
+    gov_cases_collection_name: str = Field(default="gov_cases", description="问政案例集合名称")
+    gov_powers_collection_name: str = Field(default="gov_powers", description="行政权力清单集合名称")
     vector_dimension: int = Field(
         default=1024, description="向量维度（BGE-M3 为 1024）"
     )
