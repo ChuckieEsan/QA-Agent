@@ -12,9 +12,9 @@ class GovRequestUrgency(Enum):
     """
     问政请求紧急情况枚举
     """
-    MAJOR = "major" # 紧急
-    NORMAL = "normal" # 一般
-    MINOR = "minor" # 轻微 
+    HIGH = "high" # 紧急
+    MEDIUM = "medium" # 一般
+    LOW = "low" # 轻微 
 
 
 class GovRequestType(Enum):

@@ -10,6 +10,8 @@ from pydantic import BaseModel
 from src.app.components.classifier.base_classifier import (
     BaseClassifier,
     GovRequestClassifiedResult,
+    GovRequestUrgency,
+    GovRequestType
 )
 from src.app.infra.llm.base_llm_service import BaseLLMService
 from src.app.infra.llm import create_llm_service
@@ -71,7 +73,7 @@ class GovRequestClassifier(BaseClassifier):
         except Exception as e:
             logger.warning(f"分类失败: {e}，使用默认分类")
             logger.warning(traceback.format_exc())
-            return {"request_type": "consult", "request_urgency": "normal"}
+            return {"request_type": GovRequestType.CONSULT, "request_urgency": GovRequestUrgency.MEDIUM}
 
     def _build_classification_prompt(self, text: str) -> List[Dict[str, Any]]:
         """构建分类提示词"""
@@ -100,7 +102,7 @@ class GovRequestClassifier(BaseClassifier):
 ## 输出要求
 你只能按照以下 JSON Schema 输出，包含以下字段.
 - request_type: 分类类型（advice/complaint/help/consult/other）
-- request_urgency: 紧急程度（major/normal/minor）
+- request_urgency: 紧急程度（low/medium/high）
 """
 
         return [
