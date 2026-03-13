@@ -1,17 +1,16 @@
 """
 混合向量检索器
-结合向量检索 + 多维度重排 + 缓存的完整实现
+结合向量检索 + BGE 重排 + 缓存的完整实现
 """
 
 import threading
 import numpy as np
 from typing import List, Dict, Any, Tuple, Optional
 from datetime import datetime
-from sentence_transformers import SentenceTransformer
 
 from src.config.setting import settings
-from src.app.infra.utils import get_device
 from src.app.infra.db.milvus_db import MilvusDBClient
+from src.app.infra.embedding import BaseEmbedding
 from src.app.components.rerankers import BGEReranker
 from .base_retriever import BaseRetriever
 from src.app.infra.utils.logger import get_logger
@@ -35,6 +34,7 @@ class HybridVectorRetriever(BaseRetriever):
             with cls._lock:
                 if not cls._instance:
                     cls._instance = super(HybridVectorRetriever, cls).__new__(cls)
+                    cls._instance._initialized = False
         return cls._instance
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
@@ -44,7 +44,7 @@ class HybridVectorRetriever(BaseRetriever):
         Args:
             config: 配置字典（可选），如果为 None 则使用默认配置
         """
-        if getattr(self, "_is_initialized", False):
+        if self._initialized:
             return
 
         # 合并配置：用户配置优先，否则使用 settings
@@ -63,8 +63,8 @@ class HybridVectorRetriever(BaseRetriever):
 
         logger.info("[HybridRetriever] 初始化混合策略检索器...")
         self.initialize()
-        self._is_initialized = True
         logger.info("[HybridRetriever] 初始化完成")
+        self._initialized = True
 
     def initialize(self) -> None:
         """
@@ -72,13 +72,9 @@ class HybridVectorRetriever(BaseRetriever):
 
         实现 BaseRetriever 的抽象方法
         """
-        # 1. 加载 Embedding 模型
-        self.device = get_device()
-        logger.info(f"加载 Embedding 模型: {settings.models.embedding_model_path} ...")
-        self.embed_model = SentenceTransformer(
-            str(settings.models.embedding_model_path),
-            device=self.device
-        )
+        # 1. 加载 Embedding 模型（使用单例）
+        logger.info("获取 Embedding 模型单例...")
+        self.embed_model = BaseEmbedding()
 
         # 2. 连接向量数据库
         logger.info(f"连接 Milvus: {settings.vectordb.db_path} ...")
@@ -321,12 +317,3 @@ class HybridVectorRetriever(BaseRetriever):
         """
         return cls(config=config)
 
-    @classmethod
-    def from_settings(cls) -> "HybridVectorRetriever":
-        """
-        从项目配置创建实例
-
-        Returns:
-            HybridVectorRetriever 实例
-        """
-        return cls()

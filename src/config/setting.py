@@ -31,7 +31,6 @@ class PathConfig(BaseConfig):
     data_dir: Path = Field(default=PROJECT_ROOT / "data", description="数据目录")
     model_dir: Path = Field(default=PROJECT_ROOT / "models", description="模型目录")
     log_dir: Path = Field(default=PROJECT_ROOT / "logs", description="日志目录")
-    cache_dir: Path = Field(default=PROJECT_ROOT / ".cache", description="缓存目录")
 
     # 原始数据路径
     raw_data_db_path: Path = Field(
@@ -352,7 +351,6 @@ class Settings(BaseConfig):
             self.paths.data_dir,
             self.paths.model_dir,
             self.paths.log_dir,
-            self.paths.cache_dir,
             self.paths.processed_data_dir,
             self.logging.file_path.parent,
         ]
@@ -385,7 +383,6 @@ if __name__ == "__main__":
 
     # 显示向量数据库配置
     print("\n🗄️ 向量数据库配置:")
-    print(f"  集合名称：{settings.vectordb.collection_name}")
     print(f"  向量维度：{settings.vectordb.vector_dimension}")
 
     # 显示检索器配置
