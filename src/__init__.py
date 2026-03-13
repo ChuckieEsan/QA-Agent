@@ -81,9 +81,8 @@ __all__ = [
 
     # 数据库
     "MilvusDBClient",
-    "get_milvus_client",
-    "get_milvus_client_from_config",
-
+    
+    
     # 配置
     "settings",
     "Settings",

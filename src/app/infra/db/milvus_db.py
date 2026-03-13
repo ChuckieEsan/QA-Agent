@@ -76,13 +76,10 @@ class MilvusDBClient(BaseDBClient):
             # 创建 Milvus 客户端
             self._client = MilvusClient(uri=self.db_path)
 
-            logger.info(f"✅ Milvus 连接成功")
-
-            # 检查集合是否存在，不存在则创建
-            self._ensure_collection_exists()
+            logger.info(f"Milvus 连接成功")
 
         except Exception as e:
-            logger.error(f"❌ Milvus 连接失败: {e}")
+            logger.error(f"Milvus 连接失败: {e}")
             raise
 
     def get_client(self) -> MilvusClient:
@@ -105,12 +102,12 @@ class MilvusDBClient(BaseDBClient):
         """
         try:
             if self._client is not None:
-                logger.info("🔌 关闭 Milvus 连接")
+                logger.info("关闭 Milvus 连接")
                 # MilvusClient Lite 不需要显式关闭，但可以清理引用
                 self._client = None
-                logger.info("✅ Milvus 连接已关闭")
+                logger.info("Milvus 连接已关闭")
         except Exception as e:
-            logger.error(f"❌ 关闭 Milvus 连接时出错: {e}")
+            logger.error(f"关闭 Milvus 连接时出错: {e}")
 
     # ==================== 集合管理方法 ====================
 
@@ -132,12 +129,12 @@ class MilvusDBClient(BaseDBClient):
                     enable_dynamic_field=self.enable_dynamic_field,
                 )
 
-                logger.info(f"✅ 集合 {collection_name} 创建成功")
+                logger.info(f"集合 {collection_name} 创建成功")
             else:
-                logger.info(f"✅ 集合 {collection_name} 已存在")
+                logger.info(f"集合 {collection_name} 已存在")
 
         except Exception as e:
-            logger.error(f"❌ 集合管理失败: {e}")
+            logger.error(f"集合管理失败: {e}")
             raise
 
     def has_collection(self, collection_name: str) -> bool:
@@ -154,9 +151,9 @@ class MilvusDBClient(BaseDBClient):
         删除集合
         """
         if self._client.has_collection(collection_name):
-            logger.warning(f"🗑️ 正在删除集合 {collection_name}")
+            logger.warning(f"正在删除集合 {collection_name}")
             self._client.drop_collection(collection_name)
-            logger.info(f"✅ 集合 {collection_name} 已删除")
+            logger.info(f"集合 {collection_name} 已删除")
 
     def describe_collection(self, collection_name) -> Dict:
         """
@@ -187,7 +184,7 @@ class MilvusDBClient(BaseDBClient):
             Dict: 插入结果，包含插入的 IDs
         """
         try:
-            logger.info(f"📥 向集合 {collection_name} 插入 {len(data)} 条数据")
+            logger.info(f"向集合 {collection_name} 插入 {len(data)} 条数据")
 
             # 执行插入
             result = self._client.insert(
@@ -196,11 +193,11 @@ class MilvusDBClient(BaseDBClient):
                 batch_size=batch_size
             )
 
-            logger.info(f"✅ 插入成功，插入 {result.get('insert_count', 0)} 条数据")
+            logger.info(f"插入成功，插入 {result.get('insert_count', 0)} 条数据")
             return result
 
         except Exception as e:
-            logger.error(f"❌ 插入数据失败: {e}")
+            logger.error(f"插入数据失败: {e}")
             raise
 
     def search(
@@ -241,7 +238,7 @@ class MilvusDBClient(BaseDBClient):
             return results
 
         except Exception as e:
-            logger.error(f"❌ 搜索失败: {e}")
+            logger.error(f"搜索失败: {e}")
             raise
 
     def query(
@@ -273,7 +270,7 @@ class MilvusDBClient(BaseDBClient):
             return results
 
         except Exception as e:
-            logger.error(f"❌ 条件查询失败: {e}")
+            logger.error(f"条件查询失败: {e}")
             raise
 
     def delete(
@@ -292,16 +289,16 @@ class MilvusDBClient(BaseDBClient):
             Dict: 删除结果
         """
         try:
-            logger.info(f"🗑️ 删除满足条件的数据: {filter_expr}")
+            logger.info(f"删除满足条件的数据: {filter_expr}")
             result = self._client.delete(
                 collection_name=collection_name,
                 filter=filter_expr
             )
-            logger.info(f"✅ 删除完成: {result}")
+            logger.info(f"删除完成: {result}")
             return result
 
         except Exception as e:
-            logger.error(f"❌ 删除数据失败: {e}")
+            logger.error(f"删除数据失败: {e}")
             raise
 
     def upsert(
@@ -322,17 +319,17 @@ class MilvusDBClient(BaseDBClient):
             Dict: 操作结果
         """
         try:
-            logger.info(f"🔄 更新/插入 {len(data)} 条数据")
+            logger.info(f"更新/插入 {len(data)} 条数据")
             result = self._client.upsert(
                 collection_name=collection_name,
                 data=data,
                 batch_size=batch_size
             )
-            logger.info(f"✅ 更新/插入完成")
+            logger.info(f"更新/插入完成")
             return result
 
         except Exception as e:
-            logger.error(f"❌ 更新/插入失败: {e}")
+            logger.error(f"更新/插入失败: {e}")
             raise
 
     # ==================== 统计信息方法 ====================
@@ -351,7 +348,7 @@ class MilvusDBClient(BaseDBClient):
             stats = self._client.get_collection_stats(collection_name)
             return stats
         except Exception as e:
-            logger.error(f"❌ 获取统计信息失败: {e}")
+            logger.error(f"获取统计信息失败: {e}")
             raise
 
     def get_entity_count(self, collection_name: str) -> int:
@@ -385,7 +382,7 @@ class MilvusDBClient(BaseDBClient):
             **kwargs: 其他索引参数
         """
         try:
-            logger.info(f"🔨 为字段 {field_name} 创建索引")
+            logger.info(f"为字段 {field_name} 创建索引")
             self._client.create_index(
                 collection_name=collection_name,
                 field_name=field_name,
@@ -393,9 +390,9 @@ class MilvusDBClient(BaseDBClient):
                 metric_type=metric_type or self.metric_type,
                 **kwargs
             )
-            logger.info(f"✅ 索引创建成功")
+            logger.info(f"索引创建成功")
         except Exception as e:
-            logger.error(f"❌ 创建索引失败: {e}")
+            logger.error(f"创建索引失败: {e}")
             raise
 
     def load_collection(self, collection_name) -> None:
@@ -406,11 +403,11 @@ class MilvusDBClient(BaseDBClient):
             collection_name: 集合名称
         """
         try:
-            logger.info(f"💾 加载集合 {collection_name} 到内存")
+            logger.info(f"加载集合 {collection_name} 到内存")
             self._client.load_collection(collection_name)
-            logger.info(f"✅ 集合加载成功")
+            logger.info(f"集合加载成功")
         except Exception as e:
-            logger.error(f"❌ 加载集合失败: {e}")
+            logger.error(f"加载集合失败: {e}")
             raise
 
     # ==================== 工厂方法 ====================
@@ -426,30 +423,6 @@ class MilvusDBClient(BaseDBClient):
         return cls()
 
 
-# ==================== 兼容性函数（向后兼容） ====================
-
-def get_milvus_client() -> MilvusDBClient:
-    """
-    获取 Milvus 客户端单例实例（向后兼容）
-
-    Returns:
-        MilvusDBClient: 单例客户端实例
-    """
-    return MilvusDBClient()
-
-
-def get_milvus_client_from_config(config: Dict) -> MilvusDBClient:
-    """
-    从自定义配置创建/获取 Milvus 客户端单例实例
-
-    Args:
-        config: 配置字典
-
-    Returns:
-        MilvusDBClient: 配置好的客户端实例
-    """
-    return MilvusDBClient(config)
-
 
 if __name__ == "__main__":
     # 示例1: 使用单例模式
@@ -457,7 +430,7 @@ if __name__ == "__main__":
     logger.info("示例1: 使用单例模式")
     logger.info("=" * 60)
 
-    client = get_milvus_client()
+    client = MilvusDBClient()
 
     # 获取统计信息
     count = client.get_entity_count("gov_cases")

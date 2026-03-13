@@ -252,8 +252,8 @@ class BaseRetriever(ABC):
                     "高" if similarity > 0.7 else ("中" if similarity > 0.5 else "低")
                 )
 
-                # 获取文本内容
-                text = hit.get("entity", {}).get("text", hit.get("text", ""))
+                # 获取 RAG 上下文
+                text = hit.get("text")
 
                 context_parts.append(f"\n--- 案例 {i+1} (相似度: {similarity:.1%}, 置信度: {confidence}) ---")
                 context_parts.append(text)

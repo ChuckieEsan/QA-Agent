@@ -83,34 +83,17 @@ class HybridVectorRetriever(BaseRetriever):
         # 2. 连接向量数据库
         logger.info(f"连接 Milvus: {settings.vectordb.db_path} ...")
         self.milvus_client = MilvusDBClient()
-        self.collection_name = settings.vectordb.collection_name
+        self.collection_name = settings.vectordb.gov_cases_collection_name
 
         # 3. 混合策略配置
         self.min_results = settings.retriever.min_results
         self.max_results = settings.retriever.max_results
 
-        # 4. 重排权重配置
-        self.rerank_weights = {
-            "similarity": settings.retriever.weight_similarity,
-            "recency": settings.retriever.weight_recency,
-            "length": settings.retriever.weight_length,
-        }
+        # 4. 初始化 BGE 重排模型
 
-        # 5. 初始化 BGE 重排模型（如果配置了模型路径）
-        self.reranker = None
-        if (settings.models.reranker_model and
-            settings.models.reranker_model_path and
-            settings.models.reranker_model_path.exists()):
-            try:
-                logger.info(f"加载 BGE 重排模型: {settings.models.reranker_model_path} ...")
-                self.reranker = BGEReranker(model_path=settings.models.reranker_model_path)
-                logger.info("BGE 重排模型加载完成")
-            except Exception as e:
-                logger.warning(f"BGE 重排模型加载失败: {e}")
-                logger.warning("将仅使用传统重排方法")
-
-        # 6. 时间衰减权重
-        self.recency_weights = settings.retriever.recency_weights
+        logger.info(f"加载 BGE 重排模型: {settings.models.reranker_model_path} ...")
+        self.reranker = BGEReranker(model_path=settings.models.reranker_model_path)
+        logger.info("BGE 重排模型加载完成")
 
     def retrieve(
         self,
@@ -139,7 +122,7 @@ class HybridVectorRetriever(BaseRetriever):
                   "title": str,                 # 标题
                   "department": str,            # 部门
                   "time": str,                  # 时间
-                  "content": str,               # 内容
+                  "text": str,                  # RAG 内容，格式为 标题 + 部门 + 时间 + 市民诉求 + 官方回复 + 来源连接              
                   "composite_score": float,     # 综合评分（重排后）
                   "rerank_features": Dict       # 重排特征（可选）
               }
@@ -168,9 +151,10 @@ class HybridVectorRetriever(BaseRetriever):
             # 放宽检索数量，为后续筛选和重排准备
             search_limit = top_k * 3
             raw_results = self.milvus_client.search(
+                collection_name=self.collection_name,
                 vectors=query_vec.tolist(),
                 top_k=search_limit,
-                output_fields=["text", "department", "metadata"],
+                output_fields=["text", "department", "title", "question", "answer","metadata"],
             )
 
             if not raw_results or not raw_results[0]:
@@ -202,16 +186,15 @@ class HybridVectorRetriever(BaseRetriever):
                     "entity": entity,
                     "distance": 1 - hit.get("distance", 0),
                     "similarity": hit.get("distance", 0),
-                    # 直接提取常用字段，方便上层使用
-                    "title": metadata.get("title", "无标题"),
-                    "department": entity.get("department", "未知部门"),
+                    "title": entity.get("title", ""),
+                    "department": entity.get("department", ""),
                     "time": metadata.get("time", "未知时间"),
-                    "content": entity.get("text", ""),
+                    "text": entity.get("text", ""),
                 }
                 processed_results.append(processed_hit)
 
             # 4. 混合阈值筛选
-            filtered_results = self._hybrid_threshold_filter(processed_results, query)
+            filtered_results = self._hybrid_threshold_filter(processed_results)
 
             # 5. 混合重排
             reranked_results = self._hybrid_rerank(query, filtered_results)
@@ -271,7 +254,7 @@ class HybridVectorRetriever(BaseRetriever):
 
     # ==================== 内部方法 ====================
 
-    def _hybrid_threshold_filter(self, results: List[Dict], query: str) -> List[Dict]:
+    def _hybrid_threshold_filter(self, results: List[Dict]) -> List[Dict]:
         """
         混合阈值筛选策略
 
@@ -306,134 +289,22 @@ class HybridVectorRetriever(BaseRetriever):
 
     def _hybrid_rerank(self, query: str, results: List[Dict]) -> List[Dict]:
         """
-        混合重排策略
+        BGE 重排策略
 
-        基于多个特征综合评分（移除部门权威性，所有部门信息平等对待）：
-        1. 向量相似度 (60%)
-        2. 时效性 (30%)
-        3. 内容长度 (10%)
-        4. BGE 重排模型 (如果可用)
+        使用 BGE 重排模型对结果进行重排
         """
         if len(results) <= 1:
             return results
 
-        # 如果存在BGE重排模型，优先使用它进行重排
-        if self.reranker is not None:
-            logger.info(f"使用 BGE 重排模型对 {len(results)} 个结果进行重排...")
-            reranked_results = self.reranker.rerank(query, results)
+        logger.info(f"使用 BGE 重排模型对 {len(results)} 个结果进行重排...")
+        reranked_results = self.reranker.rerank(query, results)
 
-            # 将BGE重排得分与其他特征结合起来
-            for hit in reranked_results:
-                # 使用BGE重排得分作为主要的composite_score
-                hit["composite_score"] = hit.get("rerank_score", 0.0)
+        # 使用 BGE 重排得分作为综合评分
+        for hit in reranked_results:
+            hit["composite_score"] = hit.get("rerank_score", 0.0)
+            hit["original_similarity"] = hit.get("similarity", 0.0)
 
-                # 保存原有相似度特征用于显示
-                hit["original_similarity"] = hit.get("similarity", 0.0)
-
-                # 计算其他特征用于更精细的排序
-                current_time = datetime.now()
-                time_str = hit["entity"].get("metadata", {}).get("time", "")
-                recency = self._calculate_recency(time_str, current_time)
-
-                text_len = len(hit["entity"].get("text", ""))
-                length_score = min(1.0, text_len / 1500)
-
-                # 保存特征值供后续使用
-                hit["rerank_features"] = {
-                    "similarity": hit.get("original_similarity", 0.0),
-                    "recency": recency,
-                    "length": length_score,
-                    "bge_rerank": hit.get("rerank_score", 0.0)
-                }
-
-            return reranked_results
-        else:
-            # 如果没有BGE重排模型，则使用传统的混合重排策略
-            current_time = datetime.now()
-            features = {key: [] for key in self.rerank_weights.keys()}
-
-            for hit in results:
-                # 1. 相似度特征
-                features["similarity"].append(hit["similarity"])
-
-                # 2. 时效性特征
-                time_str = hit["entity"].get("metadata", {}).get("time", "")
-                recency = self._calculate_recency(time_str, current_time)
-                features["recency"].append(recency)
-
-                # 3. 内容长度特征
-                text_len = len(hit["entity"].get("text", ""))
-                length_score = min(1.0, text_len / 1500)
-                features["length"].append(length_score)
-
-            # 归一化特征
-            norm_features = {}
-            for key, values in features.items():
-                norm_features[key] = self._normalize_features(values)
-
-            # 计算综合评分
-            for i, hit in enumerate(results):
-                composite_score = 0
-                for key, weight in self.rerank_weights.items():
-                    composite_score += norm_features[key][i] * weight
-
-                hit["composite_score"] = composite_score
-                hit["rerank_features"] = {
-                    key: norm_features[key][i] for key in self.rerank_weights.keys()
-                }
-
-            # 按综合评分降序排序
-            results.sort(key=lambda x: x["composite_score"], reverse=True)
-            return results
-
-    def _calculate_recency(self, time_str: str, current_time: datetime) -> float:
-        """计算时效性分数"""
-        if not time_str:
-            return 0.5
-
-        try:
-            # 尝试解析常见时间格式
-            formats = ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d"]
-            item_time = None
-
-            for fmt in formats:
-                try:
-                    item_time = datetime.strptime(time_str.split()[0], fmt)
-                    break
-                except:
-                    continue
-
-            if item_time:
-                # 计算时间衰减（越近分数越高）
-                days_diff = (current_time - item_time).days
-                if days_diff < 0:  # 未来时间
-                    return 0.5
-                elif days_diff <= 7:  # 一周内
-                    return 1.0
-                elif days_diff <= 30:  # 一月内
-                    return 0.9
-                elif days_diff <= 90:  # 三月内
-                    return 0.7
-                elif days_diff <= 365:  # 一年内
-                    return 0.5
-                else:  # 超过一年
-                    return 0.3
-        except:
-            pass
-
-        return 0.5  # 默认值
-
-    def _normalize_features(self, values: List[float]) -> List[float]:
-        """归一化特征值到0-1范围"""
-        if not values:
-            return values
-
-        min_val, max_val = min(values), max(values)
-
-        if max_val - min_val < 1e-6:  # 避免除以0
-            return [0.5] * len(values)
-
-        return [(v - min_val) / (max_val - min_val) for v in values]
+        return reranked_results
 
     # ==================== 静态工厂方法 ====================
 
