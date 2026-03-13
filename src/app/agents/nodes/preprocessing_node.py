@@ -1,7 +1,7 @@
 """预处理节点 - 诉求分类和要素提取"""
 
 import re
-from typing import Dict, Any, List
+from typing import Dict, Any, List, TypedDict
 from src.app.agents.state import AgentState, ProcessStatus
 from src.app.components.classifier import GovRequestClassifier
 from src.app.infra.llm import create_llm_service
@@ -9,6 +9,13 @@ from src.app.infra.llm.base_llm_service import BaseLLMService
 from src.app.infra.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+class PoliticalElements(TypedDict):
+    time: str = ""
+    location: str = ""
+    event: str = ""
+    goal: str = ""
+    subjects: List[str] = []
 
 
 def preprocess_node(state: AgentState) -> AgentState:
@@ -76,14 +83,6 @@ def extract_elements_node(state: AgentState) -> AgentState:
 """
 
     try:
-        from pydantic import BaseModel
-
-        class PoliticalElements(BaseModel):
-            time: str = ""
-            location: str = ""
-            event: str = ""
-            goal: str = ""
-            subjects: List[str] = []
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -116,17 +115,13 @@ def extract_elements_node(state: AgentState) -> AgentState:
 def clean_text(text: str) -> str:
     """
     文本清洗和脱敏
-
-    - 移除多余空白
-    - 脱敏处理（手机号、身份证号等）
     """
-    # 移除多余空白
     text = re.sub(r'\s+', ' ', text).strip()
 
-    # 脱敏手机号 (138xxxx1234)
-    text = re.sub(r'(\d{3})\d{4}(\d{4})', r'\1****\2', text)
+    # 1. 脱敏身份证（18位，前3后4，中间11位隐藏）
+    text = re.sub(r'(?<!\d)(\d{3})\d{11}(\d{4})(?!\d)', r'\1***********\2', text)
 
-    # 脱敏身份证号 (320xxxxxxx1234567890)
-    text = re.sub(r'(\d{3})\d{10}(\d{4})', r'\1**********\2', text)
+    # 2. 脱敏手机号（11位，以1开头，第二位为3-9，前后都不是数字）
+    text = re.sub(r'(?<!\d)(1[3-9]\d)\d{4}(\d{4})(?!\d)', r'\1****\2', text)
 
     return text
