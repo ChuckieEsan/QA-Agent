@@ -4,45 +4,27 @@ components 模块
 """
 
 # 检索器组件
-from src.app.components.retrievers import (
-    BaseRetriever,
-    HybridVectorRetriever,
+from src.app.components.retriever import (
+    CasesVectorRetriever,
 )
 
 # 分类器组件
 from src.app.components.classifier import (
-    BaseClassifier,
     GovRequestClassifier,
-    GovRequestType,
-)
-
-# 记忆组件
-from src.app.components.memory import (
-    BaseMemory,
-    ConversationMemory,
 )
 
 # 质量校验组件
-from src.app.components.quality import (
-    BaseValidator,
+from src.app.components.validator import (
     GovAnswerValidator,
 )
 
 __all__ = [
     # 检索器
-    "BaseRetriever",
-    "HybridVectorRetriever",
+    "CasesVectorRetriever",
 
     # 分类器
-    "BaseClassifier",
     "GovRequestClassifier",
-    "GovRequestType",
-
-    # 记忆
-    "BaseMemory",
-    "ConversationMemory",
 
     # 质量校验
-    "BaseValidator",
     "GovAnswerValidator",
 ]

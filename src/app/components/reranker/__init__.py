@@ -16,6 +16,4 @@ from .bge_reranker import BGERerankerCompressor, create_bge_compressor
 __all__ = [
     "BGERerankerCompressor",
     "create_bge_compressor",
-    # 向后兼容
-    "BGEReranker",
 ]

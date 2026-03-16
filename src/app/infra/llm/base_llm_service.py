@@ -85,7 +85,4 @@ class BaseLLMService(RunnableSerializable):
     def bind_tools(self, *args, **kwargs):
         """绑定工具 - 代理到底层 langchain model"""
         return self._llm.bind_tools(*args, **kwargs)
-
-    @property
-    def model_name(self) -> str:
-        return self.model_name
+    
