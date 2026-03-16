@@ -1,108 +1,91 @@
-from abc import ABC, abstractmethod
-from typing import List, Optional, Union, TypeVar, Generic, Dict, Any, Type
-from pydantic import BaseModel, Field, ConfigDict
+"""
+默认 LLM 服务实现
+
+使用 Provider 模式，支持多模型提供商和多模型。
+继承 RunnableSerializable，符合 LangChain 最佳实践。
+
+架构说明：
+- 通过 provider 创建具体的 LangChain 模型实例
+- 通过 model_name 指定使用该提供商的哪个模型
+- 支持多提供商：deepseek/qwen/ollama
+- 支持多模型：每个提供商可以有多个模型（generation/classification/optimization）
+- 可以直接用于 LCEL 链：prompt | llm
+"""
+
+from typing import Optional, Type
+
+from langchain_core.runnables import RunnableSerializable
 from langchain_core.messages import BaseMessage
-from src.app.infra.llm.providers.base_provider import BaseLLMProvider
-from src.config.setting import LLMProviderConfig
+from src.app.infra.llm.providers import DeepSeekProvider, QwenProvider, OllamaProvider, BaseLLMProvider
+from src.config.setting import settings
+from pydantic import BaseModel, Field
 
-# 定义消息类型的联合，支持字典或 LangChain 消息对象
-MessageType = Union[Dict[str, str], BaseMessage]
 
-# 泛型变量，表示结构化输出的类型
-T = TypeVar('T', bound=BaseModel)
+class BaseLLMService(RunnableSerializable):
+    """LangChain Runnable LLM 服务"""
 
-class BaseLLMService(ABC):
-    """
-    LLM 服务抽象基类
+    # 配置字段，用于 langchain 序列化
+    model_name: str = Field(default="default", description="模型名称")
 
-    提供统一的文本生成和结构化输出接口，支持同步和异步调用。
-    所有具体实现必须实现抽象方法。
-
-    支持通过 LLMConfig 配置模型参数，具体实现类应在 __init__ 中接收配置并初始化底层客户端。
-    """
-
-    def __init__(self, provider: BaseLLMProvider, **kwargs):
+    def __init__(
+        self,
+        provider: Optional[BaseLLMProvider] = None,
+        model_name: Optional[str] = None,
+        provider_id: Optional[str] = None,
+        **kwargs
+    ):
         """
         初始化 LLM 服务
 
         Args:
-            config: 模型配置对象，包含连接参数和默认生成参数
-            **kwargs: 额外的配置参数，可覆盖 config 中的值
+            provider: 已创建的 Provider 实例，如不提供则根据 provider_id 创建
+            model_name: 模型名称，如 "deepseek-chat"，如不提供则使用 Provider 默认
+            provider_id: 提供商 ID，如 "deepseek"、"qwen"、"ollama"
         """
-        self._provider = provider
+        # 如果没有提供 provider，根据 provider_id 创建
+        if provider is None:
+            provider_map = {
+                "deepseek": DeepSeekProvider,
+                "qwen": QwenProvider,
+                "ollama": OllamaProvider,
+            }
 
-    # 通用文本生成
-    @abstractmethod
-    def generate(
-        self,
-        messages: List[MessageType],
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        top_p: Optional[float] = None,
-        **kwargs
-    ) -> str:
-        """
-        生成文本响应（同步）
+            pid = provider_id or settings.llm.default_provider
+            provider_class = provider_map.get(pid)
+            if not provider_class:
+                raise ValueError(f"未知的提供商: {pid}")
 
-        Args:
-            messages: 消息列表，每条可以是 {"role": "user", "content": "..."} 或 BaseMessage 对象
-            temperature: 采样温度，默认 None 使用模型默认值
-            max_tokens: 最大生成 token 数
-            top_p: 核采样参数
-            **kwargs: 其他模型参数
+            # 从配置中获取该提供商的配置
+            provider_config = settings.llm.get_provider_config(pid)
+            provider = provider_class(provider_config)
 
-        Returns:
-            生成的文本内容
-        """
-        pass
+        # 使用 provider 创建具体的模型实例
+        self._llm = provider.create_model(model_name)
 
-    @abstractmethod
-    async def agenerate(
-        self,
-        messages: List[MessageType],
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        top_p: Optional[float] = None,
-        **kwargs
-    ) -> str:
-        """异步版本 generate"""
-        pass
+        # 初始化父类
+        super().__init__(model_name=model_name, **kwargs)
 
-    # 结构化输出
-    @abstractmethod
-    def generate_structured(
-        self,
-        messages: List[MessageType],
-        response_model: Type[T],
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        **kwargs
-    ) -> T:
-        """
-        生成符合 Pydantic 模型的结构化输出（同步）
+    def invoke(self, input: list[BaseMessage], config=None):
+        """同步调用"""
+        return self._llm.invoke(input, config)
 
-        底层使用函数调用或 response_format 强制模型返回 JSON，并自动解析为模型实例。
+    async def ainvoke(self, input: list[BaseMessage], config=None):
+        """异步调用"""
+        return await self._llm.ainvoke(input, config)
 
-        Args:
-            messages: 消息列表
-            response_model: Pydantic 模型类，用于定义输出格式
-            temperature: 采样温度
-            max_tokens: 最大生成 token 数
-            **kwargs: 其他参数
+    # 代理 langchain 模型的方法
+    def with_structured_output(self, schema: Type[BaseModel], method: str = "function_calling"):
+        """结构化输出 - 代理到底层 langchain model"""
+        return self._llm.with_structured_output(schema, method)
 
-        Returns:
-            response_model 的实例，已通过 Pydantic 验证
-        """
-        pass
+    def bind(self, **kwargs):
+        """绑定参数 - 代理到底层 langchain model"""
+        return self._llm.bind(**kwargs)
 
-    @abstractmethod
-    async def agenerate_structured(
-        self,
-        messages: List[MessageType],
-        response_model: Type[T],
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        **kwargs
-    ) -> T:
-        """异步版本 generate_structured"""
-        pass
+    def bind_tools(self, *args, **kwargs):
+        """绑定工具 - 代理到底层 langchain model"""
+        return self._llm.bind_tools(*args, **kwargs)
+
+    @property
+    def model_name(self) -> str:
+        return self.model_name

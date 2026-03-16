@@ -3,7 +3,7 @@ DeepSeek 提供商实现
 """
 
 from typing import Optional
-from langchain_openai import ChatOpenAI
+from langchain_deepseek import ChatDeepSeek
 from src.app.infra.llm.providers.base_provider import BaseLLMProvider
 from src.config.setting import LLMProviderConfig
 
@@ -19,7 +19,7 @@ class DeepSeekProvider(BaseLLMProvider):
     def __init__(self, config: LLMProviderConfig):
         super().__init__(config)
 
-    def create_model(self, model_name: Optional[str] = None, **kwargs) -> ChatOpenAI:
+    def create_model(self, model_name: Optional[str] = None, **kwargs) -> ChatDeepSeek:
         """
         创建 DeepSeek ChatModel 实例
 
@@ -28,11 +28,11 @@ class DeepSeekProvider(BaseLLMProvider):
             **kwargs: 额外的模型参数
 
         Returns:
-            ChatOpenAI 实例，配置为使用 DeepSeek API
+            ChatDeepSeek 实例，配置为使用 DeepSeek API
         """
         name = model_name or self._config.models.get("generation", "deepseek-chat")
 
-        return ChatOpenAI(
+        return ChatDeepSeek(
             api_key=self._config.api_key,
             base_url=self._config.base_url or "https://api.deepseek.com",
             model=name,

@@ -3,15 +3,13 @@ LLM 基础设施模块
 提供多模型、多提供商支持
 """
 
-from .base_llm_service import BaseLLMService, MessageType
-from .default_llm_service import DefaultLLMService
+from .base_llm_service import BaseLLMService
 from .providers import BaseLLMProvider, DeepSeekProvider, QwenProvider, OllamaProvider
 from typing import Optional
 
 
 __all__ = [
     "BaseLLMService",
-    "DefaultLLMService",
     "MessageType",
     "BaseLLMProvider",
     "DeepSeekProvider",
@@ -24,7 +22,7 @@ __all__ = [
 def create_llm_service(
     provider_id: Optional[str] = None,
     model_name: Optional[str] = None,
-) -> DefaultLLMService:
+) -> BaseLLMService:
     """
     创建 LLM 服务的便捷工厂函数
 
@@ -41,4 +39,4 @@ def create_llm_service(
         ### 使用 Ollama 的 72b 模型
         llm = create_llm_service(provider_id="ollama", model_name="qwen2.5:72b")
     """
-    return DefaultLLMService(provider_id=provider_id, model_name=model_name)
+    return BaseLLMService(provider_id=provider_id, model_name=model_name)

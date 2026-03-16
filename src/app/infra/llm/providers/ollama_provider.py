@@ -6,7 +6,7 @@ Ollama (本地部署) 提供商实现
 """
 
 from typing import Optional
-from langchain_openai import ChatOpenAI
+from langchain_community.chat_models import ChatOllama
 from src.app.infra.llm.providers.base_provider import BaseLLMProvider
 from src.config.setting import LLMProviderConfig
 
@@ -21,7 +21,7 @@ class OllamaProvider(BaseLLMProvider):
     def __init__(self, config: LLMProviderConfig):
         super().__init__(config)
 
-    def create_model(self, model_name: Optional[str] = None, **kwargs) -> ChatOpenAI:
+    def create_model(self, model_name: Optional[str] = None, **kwargs) -> ChatOllama:
         """
         创建 Ollama ChatModel 实例
 
@@ -30,9 +30,9 @@ class OllamaProvider(BaseLLMProvider):
             **kwargs: 额外的模型参数
 
         Returns:
-            ChatOpenAI 实例，配置为使用 Ollama OpenAI 兼容接口
+            ChatOllama 实例，配置为使用 Ollama OpenAI 兼容接口
         """
-        name = model_name or self._config.models.get("generation", "qwen2.5:7b")
+        name = model_name or self._config.models.get("generation", "llama3:8b")
 
         # Ollama OpenAI 兼容接口
         # base_url: http://localhost:11434/v1
@@ -42,8 +42,7 @@ class OllamaProvider(BaseLLMProvider):
         # 传入任意非空字符串即可
         api_key = self._config.api_key or "ollama"
 
-        return ChatOpenAI(
-            api_key=api_key,
+        return ChatOllama(
             base_url=base_url,
             model=name,
             **kwargs
