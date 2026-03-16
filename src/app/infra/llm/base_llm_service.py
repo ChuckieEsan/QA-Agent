@@ -42,6 +42,10 @@ class BaseLLMService(RunnableSerializable):
             model_name: 模型名称，如 "deepseek-chat"，如不提供则使用 Provider 默认
             provider_id: 提供商 ID，如 "deepseek"、"qwen"、"ollama"
         """
+        # 先调用父类初始化，确保 Pydantic 字段先设置
+        model_name = model_name or "default"
+        super().__init__(model_name=model_name, **kwargs)
+
         # 如果没有提供 provider，根据 provider_id 创建
         if provider is None:
             provider_map = {
@@ -62,9 +66,6 @@ class BaseLLMService(RunnableSerializable):
         # 使用 provider 创建具体的模型实例
         self._llm = provider.create_model(model_name)
 
-        # 初始化父类
-        super().__init__(model_name=model_name, **kwargs)
-
     def invoke(self, input: list[BaseMessage], config=None):
         """同步调用"""
         return self._llm.invoke(input, config)
@@ -76,7 +77,7 @@ class BaseLLMService(RunnableSerializable):
     # 代理 langchain 模型的方法
     def with_structured_output(self, schema: Type[BaseModel], method: str = "function_calling"):
         """结构化输出 - 代理到底层 langchain model"""
-        return self._llm.with_structured_output(schema, method)
+        return self._llm.with_structured_output(schema, method=method)
 
     def bind(self, **kwargs):
         """绑定参数 - 代理到底层 langchain model"""
