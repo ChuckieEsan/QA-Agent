@@ -1,66 +1,36 @@
 """Agent 状态定义 - 基于 LangGraph 的状态管理"""
 
-from typing import TypedDict, List, Optional, Dict, Any
-from enum import Enum
-
-
-class ProcessStatus(str, Enum):
-    """处理状态枚举"""
-    PENDING = "pending"
-    PREPROCESSED = "preprocessed"
-    TOOLS_CALLED = "tools_called"
-    FUSED = "fused"
-    GENERATED = "generated"
-    VALIDATED = "validated"
-    COMPLETED = "completed"
-    WORK_ORDER_CREATED = "work_order_created"
-    FAILED = "failed"
+from typing import Annotated, TypedDict, Optional, Any
+from langchain_core.messages import HumanMessage
+from langgraph.graph.message import add_messages
+from langchain_core.messages import AnyMessage
 
 
 class AgentState(TypedDict):
     """
-    Agent 状态定义
+    Agent 状态定义 - 基于 LangGraph add_messages
 
-    包含整个处理流程中各阶段的数据
+    使用 LangGraph 的 add_messages 注解自动处理对话历史
     """
-    # 原始输入
-    original_query: str
+    # LangGraph 原生消息流，自动 append 历史记录
+    messages: Annotated[list[AnyMessage], add_messages]
 
-    # 预处理阶段
-    cleaned_query: str
-    classification: Optional[Dict[str, Any]]  # 类型、紧急度
-    political_elements: Optional[Dict[str, Any]]  # 五大核心要素
-
-    # 工具调用阶段
-    tool_results: List[Dict[str, Any]]  # 工具返回结果
-    retrieved_knowledge: List[Dict[str, Any]]  # 检索到的知识
-
-    # 知识融合阶段
-    fused_context: str  # 融合后的上下文
-
-    # 生成阶段
-    generated_response: str
-
-    # 验证阶段
-    confidence_score: float  # 置信度
-
-    # 元数据
-    status: ProcessStatus
-    error_message: Optional[str]
+    # 业务流转状态
+    classification: Optional[Any]  # GovRequestClassifiedResult
+    retrieved_context: Optional[str]  # 检索到的上下文
+    confidence_score: Optional[float]  # 置信度 0-1
+    final_reply: Optional[str]  # 最终回复
+    work_order_id: Optional[str]  # 工单ID（如果触发兜底）
 
 
 def create_initial_state(query: str) -> AgentState:
     """创建初始状态"""
+
     return {
-        "original_query": query,
-        "cleaned_query": "",
+        "messages": [HumanMessage(content=query)],
         "classification": None,
-        "political_elements": None,
-        "tool_results": [],
-        "retrieved_knowledge": [],
-        "fused_context": "",
-        "generated_response": "",
+        "retrieved_context": "",
         "confidence_score": 0.0,
-        "status": ProcessStatus.PENDING,
-        "error_message": None,
+        "final_reply": "",
+        "work_order_id": None,
     }
