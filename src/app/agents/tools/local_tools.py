@@ -1,4 +1,5 @@
-from langchain_core.tools import tool
+from typing import Annotated, Union
+from langchain_core.tools import tool, InjectedToolCallId
 from pydantic import BaseModel, Field
 
 from src.app.components.retriever import (
@@ -21,6 +22,9 @@ from src.app.components.validator.answer_validator import (
 )
 
 from src.app.infra.utils.logger import get_logger
+from langgraph.types import Command
+from langchain.messages import AIMessage, ToolMessage
+from langgraph.graph import END
 
 logger = get_logger(__name__)
 
@@ -50,11 +54,14 @@ class RetrieveCasesArgs(BaseModel):
 
 class ClassifiyGovRequestArgs(BaseModel):
     query: str = Field(..., description="用户原始的完整问政诉求文本")
-    
+
 
 class ValidateAnswerArgs(BaseModel):
     query: str = Field(..., description="用户原始的完整问政诉求文本。")
-    context: str = Field(..., description="你基于检索工具获取到的核心政策依据或历史案例（请提炼核心事实传入，不要为空）。")
+    context: str = Field(
+        ...,
+        description="你基于检索工具获取到的核心政策依据或历史案例（请提炼核心事实传入，不要为空）。",
+    )
     draft_answer: str = Field(..., description="你准备回复给用户的【草稿回答】。")
 
 
@@ -151,7 +158,12 @@ def classify_gov_request_tool(query: str) -> str:
 
 
 @tool("validate_answer_tool", args_schema=ValidateAnswerArgs)
-def validate_answer_tool(query: str, context: str, draft_answer: str) -> str:
+async def validate_answer_tool(
+    query: str,
+    context: str,
+    draft_answer: str,
+    tool_call_id: Annotated[str, InjectedToolCallId],
+) -> Union[str, Command]:
     """
     【回复质量与安全审查工具 (最终回复前必须调用)】
     核心用途：当你收集完信息，并**准备向用户输出最终答案之前**，你必须调用此工具对你的“草稿回答”进行审核。
@@ -161,20 +173,29 @@ def validate_answer_tool(query: str, context: str, draft_answer: str) -> str:
     2. 如果工具返回【不通过】，你**绝对不能**将草稿发给用户！必须仔细阅读“修改建议”，修正你的草稿，并可以再次调用此工具直到通过为止。
     """
     logger.info(f"正在校验大模型草稿...")
-    
+
     # 调用同步验证逻辑
-    result: GovAnswerValidatedResult = _gov_answer_validator.validate(
-        answer=draft_answer, 
-        query=query, 
-        context=context
+    result: GovAnswerValidatedResult = await _gov_answer_validator.validate(
+        answer=draft_answer, query=query, context=context
     )
-    
+
     # 组装返回给大模型的反馈意见
     if result.is_passed:
         logger.info("草稿校验通过！")
-        return (
-            "【审核结果】: 通过\n"
-            "【系统指示】: 你的草稿回答非常准确且合规，请直接将刚才的 draft_answer 作为最终回复输出给用户，无需再做修改。"
+        # 这里直接返回结果，不再重复输出消耗 token
+        return Command(
+            goto=END,
+            update={
+                "messages": [
+                    # 闭合刚才的 tool_call
+                    ToolMessage(
+                        content="【系统底层指令】校验已通过，强制阻断 LLM 二次生成。",
+                        tool_call_id=tool_call_id,
+                    ),
+                    # 然后再把拦截下来的最终回答塞进去
+                    AIMessage(content=draft_answer),
+                ]
+            },
         )
     else:
         logger.warning(f"草稿校验被拦截，要求大模型重写。原因: {result.suggestion}")

@@ -42,7 +42,7 @@ def create_work_order(order_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def get_available_tools():
+def get_mcp_tools():
     """
     获取可用的工具列表
 
