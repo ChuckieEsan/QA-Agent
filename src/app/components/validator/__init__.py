@@ -1,5 +1,7 @@
-from .answer_validator import GovAnswerValidator
+from .answer_validator import GovAnswerValidator, create_gov_answer_validator, GovAnswerValidatedResult
 
 __all__ = [
-    "GovAnswerValidator"
+    "GovAnswerValidator",
+    "create_gov_answer_validator",
+    "GovAnswerValidatedResult"
 ]

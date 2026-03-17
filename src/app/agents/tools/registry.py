@@ -1,76 +1,46 @@
-"""工具注册表 - 管理所有可用工具"""
+"""
+工具注册表
+不再维护单例类，直接聚合返回 List[BaseTool] 给 Agent 使用
+"""
 
-from typing import Dict, Any, Optional, Callable
+from typing import List
 from langchain_core.tools import BaseTool
-from src.app.agents.tools.mcp_tools import get_available_tools
 from src.app.infra.utils.logger import get_logger
+
+# 导入本地工具
+from src.app.agents.tools.local_tools import (
+    classify_gov_request_tool,
+    retrieve_powers_tool,
+    retrieve_cases_tool,
+    validate_answer_tool
+)
+
+# 导入MCP 工具
+from src.app.agents.tools.mcp_tools import get_available_tools
 
 logger = get_logger(__name__)
 
-
-class ToolRegistry:
+def get_all_agent_tools() -> List[BaseTool]:
     """
-    工具注册表
-
-    管理所有可用的 MCP 工具
+    动态获取当前 Agent 可用的所有工具集合。
+    每次创建 Agent 或处理请求时调用此函数，确保 MCP 工具列表是最新的。
     """
-
-    _instance = None
-    _tools: Dict[str, BaseTool] = {}
-
-    def __new__(cls):
-        if not cls._instance:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialize()
-        return cls._instance
-
-    def _initialize(self):
-        """初始化工具注册表"""
-        logger.info("[ToolRegistry] 初始化工具注册表...")
-
-        # 加载所有可用工具
-        tools = get_available_tools()
-        for tool_func in tools:
-            self._tools[tool_func.name] = tool_func
-
-        logger.info(f"[ToolRegistry] 已加载 {len(self._tools)} 个工具")
-
-    def get_tool(self, name: str) -> Optional[BaseTool]:
-        """
-        获取指定名称的工具
-
-        Args:
-            name: 工具名称
-
-        Returns:
-            工具实例，如果不存在则返回 None
-        """
-        return self._tools.get(name)
-
-    def call_tool(self, name: str, args: Dict[str, Any]) -> Any:
-        """
-        调用指定工具
-
-        Args:
-            name: 工具名称
-            args: 工具参数
-
-        Returns:
-            工具执行结果
-        """
-        tool = self.get_tool(name)
-        if not tool:
-            raise ValueError(f"Tool '{name}' not found")
-
-        logger.info(f"[ToolRegistry] Calling tool: {name}")
-        result = tool.invoke(args)
-        return result
-
-    def list_tools(self) -> list:
-        """
-        列出所有可用工具
-
-        Returns:
-            工具名称列表
-        """
-        return list(self._tools.keys())
+    # 1. 加载本地固化的核心业务工具
+    tools: List[BaseTool] =[
+        classify_gov_request_tool,
+        retrieve_powers_tool,
+        retrieve_cases_tool,
+        validate_answer_tool
+    ]
+    
+    # 2. 动态追加 MCP 远程工具 (比如网关层的 create_work_order 等)
+    try:
+        mcp_tools = get_available_tools()
+        if mcp_tools:
+            tools.extend(mcp_tools)
+            logger.info(f"[ToolRegistry] 成功挂载 {len(mcp_tools)} 个 MCP 远程工具")
+    except Exception as e:
+        logger.error(f"[ToolRegistry] 动态加载 MCP 工具失败，已降级为纯本地工具模式。错误: {e}")
+        
+    logger.info(f"[ToolRegistry] 工具集装配完成，共提供 {len(tools)} 个工具供 Agent 调用。")
+    return tools
