@@ -4,12 +4,12 @@
 LangChain 兼容的检索器实现
 """
 
-from .base_retriever import LangChainRetriever
-from .cases_retriever import CasesVectorRetriever
-from .powers_retriever import PowersVectorRetriever
+from .cases_retriever import CasesVectorRetriever, create_cases_retriever
+from .powers_retriever import PowersVectorRetriever, create_powers_retriever
 
 __all__ = [
-    "LangChainRetriever",
     "CasesVectorRetriever",
     "PowersVectorRetriever",
+    "create_cases_retriever",
+    "create_powers_retriever"
 ]

@@ -36,11 +36,29 @@ class GovRequestType(Enum):
     HELP = "help"  # 求助
     CONSULT = "consult"  # 咨询
     OTHER = "other"  # 其他
+    
+    @property
+    def chinese(self):
+        """根据成员名返回中文描述"""
+        return {
+            'ADVICE': '建议',
+            'COMPLAINT': '投诉',
+            'HELP': '求助',
+            'CONSULT': '咨询',
+            'OTHER': '其他',
+        }[self.name]
 
 
 class GovRequestClassifiedResult(BaseModel):
     request_type: GovRequestType = Field(description="问政请求类型")
-    request_department: str = Field(description="")
+    request_department: Optional[str] = Field(
+        default="待确定",
+        description="问政请求精确对应的市、区、县级主管部门或者相关单位。如果不确定具体的相关单位，请直接输出'待确定'",
+    )
+    request_city_department: Optional[str] = Field(
+        default="待检索",
+        description="问政请求对应的市级主管部门。如果不确定具体的管辖部门，请直接输出 '待检索'，不要瞎猜。",
+    )
 
     class Config:
         # 允许字段别名（例如 'requestType' -> 'request_type'）
@@ -69,7 +87,9 @@ class GovRequestClassifier(BaseModel):
     def model_post_init(self, __context) -> None:
         """初始化后构建 LCEL 链"""
         self._build_chain()
-        logger.info(f"GovRequestClassifier 初始化完成（使用模型: {getattr(self.llm, 'model_name', 'unknown')}）")
+        logger.info(
+            f"GovRequestClassifier 初始化完成（使用模型: {getattr(self.llm, 'model_name', 'unknown')}）"
+        )
 
     def _build_chain(self) -> None:
         """使用 langchain LCEL 构建分类 Chain"""
@@ -134,9 +154,7 @@ class GovRequestClassifier(BaseModel):
         except Exception as e:
             logger.warning(f"分类失败: {e}，使用默认分类")
             logger.warning(traceback.format_exc())
-            return {
-                "request_type": GovRequestType.CONSULT,
-            }
+            return GovRequestClassifiedResult(request_type=GovRequestType.CONSULT)
 
 
 def create_gov_request_classifier(
@@ -154,8 +172,6 @@ def create_gov_request_classifier(
         GovRequestClassifier 实例
     """
     if llm is None:
-        llm = create_llm_service(
-            provider_id="deepseek", model_name="deepseek-chat"
-        )
+        llm = create_llm_service(provider_id="deepseek", model_name="deepseek-chat")
 
     return GovRequestClassifier(llm=llm, top_k=top_k)
