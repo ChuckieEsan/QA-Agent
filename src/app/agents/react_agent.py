@@ -94,10 +94,11 @@ def create_gov_agent():
     workflow.add_node("agent", call_model)
     workflow.add_node("tools", execute_tools)
     
+    # TODO: 需要优化一下图的流转逻辑，目前的熔断逻辑可能失效
     workflow.add_edge(START, "agent")
     workflow.add_conditional_edges("agent", should_continue)
     # 默认从工具回到模型，除非 execute_tools 抛出了 Command(goto="__end__")
-    workflow.add_edge("tools", "agent") 
+    workflow.add_edge("tools", "agent")
     
     memory = MemorySaver()
     agent_app = workflow.compile(checkpointer=memory)

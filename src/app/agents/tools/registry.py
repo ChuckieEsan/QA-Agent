@@ -16,11 +16,11 @@ from src.app.agents.tools.local_tools import (
 )
 
 # 导入MCP 工具
-from src.app.agents.tools.mcp_tools import get_available_tools
+from src.app.agents.tools.mcp_tools import get_mcp_tools
 
 logger = get_logger(__name__)
 
-def get_all_agent_tools() -> List[BaseTool]:
+def get_all_tools() -> List[BaseTool]:
     """
     动态获取当前 Agent 可用的所有工具集合。
     每次创建 Agent 或处理请求时调用此函数，确保 MCP 工具列表是最新的。
@@ -35,7 +35,7 @@ def get_all_agent_tools() -> List[BaseTool]:
     
     # 2. 动态追加 MCP 远程工具 (比如网关层的 create_work_order 等)
     try:
-        mcp_tools = get_available_tools()
+        mcp_tools = get_mcp_tools()
         if mcp_tools:
             tools.extend(mcp_tools)
             logger.info(f"[ToolRegistry] 成功挂载 {len(mcp_tools)} 个 MCP 远程工具")
