@@ -3,14 +3,11 @@
 """
 
 from typing import List, TypedDict, Annotated, Literal
-from langchain_core.tools import BaseTool
-from langchain_core.messages import SystemMessage, ToolMessage
-from langchain.agents import create_agent
+from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.types import Command
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
-from src.config.setting import settings
 from src.app.agents.tools.registry import get_all_tools
 from src.app.infra.utils.logger import get_logger
 from src.app.infra.llm import create_llm_service
@@ -88,17 +85,30 @@ def create_gov_agent():
         if state["messages"][-1].tool_calls:
             return "tools"
         return "__end__"
+    
+    def route_after_tools(state: AgentState) -> Literal["agent", "__end__"]:
+        last_message = state["messages"][-1]
+        
+        # 核心判断：如果最后一条消息是 AIMessage，
+        # 说明我们的 `validate_answer_tool` 熔断生效，成功把草稿塞进来了
+        # 既然回答已经就绪，图必须立刻结束，绝不能再去找大模型！
+        if isinstance(last_message, AIMessage):
+            return "__end__"
+            
+        # 否则（通常是普通的 ToolMessage 返回了检索结果），需要大模型继续思考
+        return "agent"
+
 
     workflow = StateGraph(AgentState)
     
     workflow.add_node("agent", call_model)
     workflow.add_node("tools", execute_tools)
     
-    # TODO: 需要优化一下图的流转逻辑，目前的熔断逻辑可能失效
     workflow.add_edge(START, "agent")
     workflow.add_conditional_edges("agent", should_continue)
-    # 默认从工具回到模型，除非 execute_tools 抛出了 Command(goto="__end__")
-    workflow.add_edge("tools", "agent")
+    
+    # workflow.add_edge("tools", "agent")
+    workflow.add_conditional_edges("tools", route_after_tools)
     
     memory = MemorySaver()
     agent_app = workflow.compile(checkpointer=memory)

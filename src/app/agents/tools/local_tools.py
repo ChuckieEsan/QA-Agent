@@ -184,7 +184,6 @@ async def validate_answer_tool(
         logger.info("草稿校验通过！")
         # 这里直接返回结果，不再重复输出消耗 token
         return Command(
-            goto=END,
             update={
                 "messages": [
                     # 闭合刚才的 tool_call
