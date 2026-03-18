@@ -85,7 +85,7 @@ class PowersVectorRetriever(BaseRetriever):
                         "department": entity.get("department", ""),
                         "power_type": entity.get("power_type", ""),
                         "power_name": entity.get("power_name", ""),
-                        "similarity": hit.get("distance", 0),
+                        "similarity": 1 - hit.get("distance", 0),
                     }
                 )
             )

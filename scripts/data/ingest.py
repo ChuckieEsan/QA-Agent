@@ -13,27 +13,45 @@ sys.path.append(os.getcwd())
 from src.config.setting import settings
 from src.app.infra.utils import generate_doc_id, get_device, clean_text
 from src.app.infra.utils.logger import get_logger
+from src.app.infra.db.milvus_db import MilvusDBClient
+from src.app.infra.db.postgres_db import PostgresDBClient
 
 logger = get_logger(__name__)
 
 # ================= 配置区域 =================
 BATCH_SIZE = 16
 MODEL_PATH = str(settings.models.embedding_model_path)
-MILVUS_DB_PATH = str(settings.vectordb.db_path)
+MILVUS_DB_PATH = str(settings.milvus_db.db_path)
 GOV_CASES_COLLECTION_NAME = (
     settings.vectordb.gov_cases_collection_name
-)  # 问政案例 collection
+)  # 问政案例 collection/table
 GOV_POWERS_COLLECTION_NAME = (
     settings.vectordb.gov_powers_collection_name
-)  # 行政权力清单 collection
+)  # 行政权力清单 collection/table
 SQLITE_DB_PATH = str(settings.paths.raw_data_db_path)
 DATA_DIR = settings.paths.data_dir
 
 
+def get_db_client(db_type: str):
+    """
+    根据 db_type 获取数据库客户端
+
+    Args:
+        db_type: 数据库类型 (milvus/postgres)
+
+    Returns:
+        数据库客户端实例
+    """
+    if db_type == "postgres":
+        return PostgresDBClient()
+    else:
+        return MilvusDBClient()
+
+
 def init_milvus(
-    client: MilvusClient, collection_name: str, drop_existing: bool = False
+    client: MilvusDBClient, collection_name: str, drop_existing: bool = False
 ):
-    """初始化数据库集合 Schema"""
+    """初始化 Milvus 集合 Schema"""
     if client.has_collection(collection_name):
         if drop_existing:
             logger.info(f"检测到集合 {collection_name} 已存在，正在删除重建...")
@@ -43,7 +61,7 @@ def init_milvus(
             return False  # 集合已存在，返回 False 表示不需要重建
 
     logger.info(f"创建新集合 {collection_name} Schema...")
-    client.create_collection(
+    client._client.create_collection(
         collection_name=collection_name,
         dimension=settings.models.embedding_size,  # BGE-M3 维度
         metric_type="COSINE",
@@ -51,6 +69,20 @@ def init_milvus(
         enable_dynamic_field=True,
     )
     return True  # 集合新建成功
+
+
+def init_postgres(
+    client: PostgresDBClient, table_name: str, drop_existing: bool = False
+):
+    """初始化 PostgreSQL 表"""
+    if client.has_collection(table_name):
+        if drop_existing:
+            logger.info(f"检测到表 {table_name} 已存在，正在删除重建...")
+            client.drop_collection(table_name)
+        else:
+            logger.info(f"表 {table_name} 已存在，将使用增量模式...")
+            return False
+    return True
 
 
 def fetch_data_from_sqlite(db_path: str):
@@ -75,7 +107,7 @@ def fetch_data_from_sqlite(db_path: str):
     return rows
 
 
-def fetch_existing_doc_ids(client: MilvusClient, collection_name: str) -> set:
+def fetch_existing_doc_ids_milvus(client: MilvusDBClient, collection_name: str) -> set:
     """从 Milvus 获取已存在的 doc_id 集合"""
     try:
         # 查询所有数据的 metadata.doc_id 字段
@@ -95,10 +127,38 @@ def fetch_existing_doc_ids(client: MilvusClient, collection_name: str) -> set:
         return set()
 
 
-def ingest_cases(
-    client: MilvusClient, embed_model: SentenceTransformer, incremental: bool = True
-):
-    """导入问政案例数据"""
+def fetch_existing_doc_ids_postgres(client: PostgresDBClient, table_name: str) -> set:
+    """从 PostgreSQL 获取已存在的 doc_id 集合"""
+    try:
+        # 通过 JSONB 查询 metadata->>'doc_id'
+        results = client.query(
+            collection_name=table_name,
+            filter_expr="metadata IS NOT NULL",
+            output_fields=["metadata"],
+        )
+        doc_ids = set()
+        for item in results:
+            metadata = item.get("metadata", {})
+            if isinstance(metadata, dict) and "doc_id" in metadata:
+                doc_ids.add(metadata["doc_id"])
+
+        logger.info(f"已获取 {len(doc_ids)} 条已存在的 doc_id")
+        return doc_ids
+    except Exception as e:
+        logger.warning(f"查询已存在数据失败: {e}，将执行全量导入")
+        return set()
+
+
+def fetch_existing_doc_ids(client, collection_name: str, db_type: str) -> set:
+    """获取已存在的 doc_id 集合（根据 db_type 选择实现）"""
+    if db_type == "postgres":
+        return fetch_existing_doc_ids_postgres(client, collection_name)
+    else:
+        return fetch_existing_doc_ids_milvus(client, collection_name)
+
+
+def ingest_cases(client, embed_model: SentenceTransformer, db_type: str = "milvus"):
+    """导入问政案例数据（全量导入）"""
     # 1. 读取数据
     try:
         rows = fetch_data_from_sqlite(SQLITE_DB_PATH)
@@ -111,41 +171,22 @@ def ingest_cases(
         logger.warning("数据库为空，请先运行 crawl.py")
         return
 
-    # 2. 初始化 Milvus（增量模式）
-    need_drop = not incremental
-    if not init_milvus(client, GOV_CASES_COLLECTION_NAME, drop_existing=need_drop):
-        # 集合已存在，获取已存在的 doc_id
-        existing_ids = fetch_existing_doc_ids(client, GOV_CASES_COLLECTION_NAME)
+    # 2. 删除已有数据并重建表
+    logger.info(f"删除已有表 {GOV_CASES_COLLECTION_NAME} 并重建...")
+    if db_type == "postgres":
+        client.drop_collection(GOV_CASES_COLLECTION_NAME)
+        init_postgres(client, GOV_CASES_COLLECTION_NAME)
     else:
-        existing_ids = set()
+        client.drop_collection(GOV_CASES_COLLECTION_NAME)
+        init_milvus(client, GOV_CASES_COLLECTION_NAME)
 
     # 3. 批量处理
     data_list = [dict(row) for row in rows]
-
-    # 过滤需要新增的数据
-    if incremental and existing_ids:
-        data_to_process = []
-        for item in data_list:
-            question_text = clean_text(item["question"])
-            answer_text = clean_text(item["answer"])
-            doc_id = generate_doc_id(question_text, answer_text)
-            if doc_id not in existing_ids:
-                data_to_process.append(item)
-        logger.info(
-            f"增量模式：{len(data_to_process)} 条新数据需要导入（已过滤 {len(existing_ids)} 条已存在数据）"
-        )
-    else:
-        data_to_process = data_list
-
-    if not data_to_process:
-        logger.info("没有新数据需要导入")
-        return
-
-    total_rows = len(data_to_process)
+    total_rows = len(data_list)
     logger.info(f"开始向量化并入库...（共 {total_rows} 条）")
 
     for i in tqdm(range(0, total_rows, BATCH_SIZE), desc="Processing cases"):
-        batch = data_to_process[i : i + BATCH_SIZE]
+        batch = data_list[i : i + BATCH_SIZE]
 
         # 准备 Embedding 的文本：主要使用"问题"
         texts_to_embed = [clean_text(item["question"]) for item in batch]
@@ -198,7 +239,9 @@ def ingest_cases(
     logger.info(f"问政案例入库完成！共导入 {total_rows} 条数据")
 
 
-def ingest_gov_powers(client: MilvusClient, embed_model: SentenceTransformer):
+def ingest_gov_powers(
+    client, embed_model: SentenceTransformer, db_type: str = "milvus"
+):
     """导入行政权力清单数据"""
     excel_file = DATA_DIR / "泸州市市本级行政权力清单目录（2021年本）.xlsx"
 
@@ -206,8 +249,14 @@ def ingest_gov_powers(client: MilvusClient, embed_model: SentenceTransformer):
         logger.error(f"找不到行政权力清单文件: {excel_file}")
         return
 
-    # 初始化 Milvus
-    init_milvus(client, GOV_POWERS_COLLECTION_NAME, drop_existing=True)
+    # 初始化数据库
+    logger.info(f"删除已有表 {GOV_POWERS_COLLECTION_NAME} 并重建...")
+    if db_type == "postgres":
+        client.drop_collection(GOV_POWERS_COLLECTION_NAME)
+        init_postgres(client, GOV_POWERS_COLLECTION_NAME)
+    else:
+        client.drop_collection(GOV_POWERS_COLLECTION_NAME)
+        init_milvus(client, GOV_POWERS_COLLECTION_NAME)
 
     logger.info(f"读取行政权力清单: {excel_file}")
     guide_data_file = pd.ExcelFile(excel_file)
@@ -228,12 +277,17 @@ def ingest_gov_powers(client: MilvusClient, embed_model: SentenceTransformer):
         )
 
         for _, row in df.iterrows():
+            # 处理备注字段的 NaN 值
+            note = row["备注"] if pd.notna(row["备注"]) else None
+            metadata = {"note": note} if note is not None else {}
+
             all_documents.append(
                 {
                     "text": row["semantic_text"],
                     "department": row["市级部门"],
                     "power_type": row["权力类型"],
                     "power_name": row["权力名称"],
+                    "metadata": metadata
                 }
             )
 
@@ -257,6 +311,7 @@ def ingest_gov_powers(client: MilvusClient, embed_model: SentenceTransformer):
                     "power_type": doc["power_type"],
                     "power_name": doc["power_name"],
                     "doc_type": "gov_power",
+                    "metadata": doc["metadata"]
                 }
             )
 
@@ -266,26 +321,39 @@ def ingest_gov_powers(client: MilvusClient, embed_model: SentenceTransformer):
 
 
 def test_search(
-    client: MilvusClient,
+    client,
     embed_model: SentenceTransformer,
     collection_name: str,
     query: str,
+    db_type: str = "milvus",
 ):
     """测试检索"""
-    logger.info(f"测试检索 collection '{collection_name}': '{query}'")
+    logger.info(f"测试检索 {db_type} '{collection_name}': '{query}'")
     query_vec = embed_model.encode([query], normalize_embeddings=True)
 
-    res = client.search(
-        collection_name=collection_name,
-        data=query_vec,
-        limit=2,
-        output_fields=["text", "department"],
-    )
+    if db_type == "postgres":
+        res = client.search(
+            collection_name=collection_name,
+            vectors=query_vec.tolist(),
+            top_k=3,
+            output_fields=["text", "department", "distance"],
+        )
+        for rank, hit in enumerate(res[0]):
+            logger.info(f"Rank {rank+1} (distance: {hit.get('distance', 0):.4f})")
+            logger.info(f"部门: {hit.get('department')}")
+            logger.info(f"内容摘要: {hit.get('text', '')[:100]}...")
+    else:
+        res = client.search(
+            collection_name=collection_name,
+            vectors=query_vec,
+            top_k=3,
+            output_fields=["text", "department"],
+        )
 
-    for rank, hit in enumerate(res[0]):
-        logger.info(f"Rank {rank+1} (Score: {hit['distance']:.4f})")
-        logger.info(f"部门: {hit['entity'].get('department')}")
-        logger.info(f"内容摘要: {hit['entity'].get('text')[:100]}...")
+        for rank, hit in enumerate(res[0]):
+            logger.info(f"Rank {rank+1} (Distance: {hit['distance']:.4f})")
+            logger.info(f"部门: {hit['entity'].get('department')}")
+            logger.info(f"内容摘要: {hit['entity'].get('text')[:100]}...")
 
 
 def main():
@@ -298,16 +366,17 @@ def main():
         help="导入模式: cases=问政案例, powers=行政权力清单, all=全部",
     )
     parser.add_argument(
-        "--incremental",
-        action="store_true",
-        default=True,
-        help="增量模式（仅对 cases 有效）：只导入新数据，不删除已有数据",
+        "--db-type",
+        type=str,
+        choices=["milvus", "postgres"],
+        default=settings.db_type,
+        help="数据库类型: milvus 或 postgres",
     )
     parser.add_argument(
         "--force",
         action="store_true",
         default=False,
-        help="强制重建集合（删除后重建）",
+        help="强制重建集合/表（删除后重建）",
     )
 
     args = parser.parse_args()
@@ -321,18 +390,25 @@ def main():
         logger.error(f"模型加载失败: {e}")
         return
 
-    # 初始化 Milvus 客户端
-    os.makedirs(os.path.dirname(MILVUS_DB_PATH), exist_ok=True)
-    client = MilvusClient(MILVUS_DB_PATH)
+    # 初始化数据库客户端
+    db_type = args.db_type
+    logger.info(f"使用数据库类型: {db_type}")
+
+    if db_type == "postgres":
+        os.makedirs(os.path.dirname(MILVUS_DB_PATH), exist_ok=True)
+        client = PostgresDBClient()
+    else:
+        os.makedirs(os.path.dirname(MILVUS_DB_PATH), exist_ok=True)
+        # MilvusDBClient 返回的是单例包装类，需要获取内部 client
+        milvus_wrapper = MilvusDBClient()
+        client = milvus_wrapper
 
     # 根据模式执行导入
     if args.mode in ["cases", "all"]:
         logger.info("=" * 50)
         logger.info("开始导入问政案例数据...")
         logger.info("=" * 50)
-        ingest_cases(
-            client, embed_model, incremental=args.incremental and not args.force
-        )
+        ingest_cases(client, embed_model, db_type=db_type)
 
     if args.mode in ["powers", "all"]:
         logger.info("=" * 50)
@@ -340,23 +416,33 @@ def main():
         logger.info("=" * 50)
         # powers 模式默认强制重建，因为行政权力清单变更不频繁
         if args.mode == "powers" or args.force:
-            ingest_gov_powers(client, embed_model)
+            ingest_gov_powers(client, embed_model, db_type=db_type)
         else:
             # 检查是否已存在
             if client.has_collection(GOV_POWERS_COLLECTION_NAME):
                 logger.info(
-                    f"集合 {GOV_POWERS_COLLECTION_NAME} 已存在，跳过。如需重新导入请使用 --force"
+                    f"表/集合 {GOV_POWERS_COLLECTION_NAME} 已存在，跳过。如需重新导入请使用 --force"
                 )
             else:
-                ingest_gov_powers(client, embed_model)
+                ingest_gov_powers(client, embed_model, db_type=db_type)
 
     # 测试检索
     if args.mode == "cases":
         test_search(
-            client, embed_model, GOV_CASES_COLLECTION_NAME, "雨露计划什么时候发？"
+            client,
+            embed_model,
+            GOV_CASES_COLLECTION_NAME,
+            "雨露计划什么时候发？",
+            db_type=db_type,
         )
     elif args.mode == "powers":
-        test_search(client, embed_model, GOV_POWERS_COLLECTION_NAME, "公积金提取")
+        test_search(
+            client,
+            embed_model,
+            GOV_POWERS_COLLECTION_NAME,
+            "公积金提取",
+            db_type=db_type,
+        )
 
 
 if __name__ == "__main__":

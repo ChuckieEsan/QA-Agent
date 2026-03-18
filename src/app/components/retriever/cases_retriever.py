@@ -98,8 +98,8 @@ class CasesVectorRetriever(BaseRetriever):
                         "time": metadata.get("time", ""),
                         "question": entity.get("question", ""),
                         "answer": entity.get("answer", ""),
-                        "distance": 1 - hit.get("distance", 0),
-                        "similarity": hit.get("distance", 0),
+                        "distance": hit.get("distance", 0),
+                        "similarity": 1 - hit.get("distance", 0),
                     }
                 )
             )

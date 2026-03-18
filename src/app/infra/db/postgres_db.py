@@ -9,7 +9,7 @@ import json
 from datetime import datetime
 import psycopg2
 from psycopg2 import sql
-from psycopg2.extras import execute_values
+from pgvector.psycopg2 import register_vector
 import numpy as np
 
 from src.app.infra.db.base_db import BaseDBClient
@@ -100,6 +100,8 @@ class PostgresDBClient(BaseDBClient):
             # 确保 pgvector 扩展已安装
             self._cursor.execute("CREATE EXTENSION IF NOT EXISTS vector")
             self._conn.commit()
+            
+            register_vector(self._conn)
 
             logger.info(f"PostgreSQL 连接成功")
 
@@ -197,8 +199,9 @@ class PostgresDBClient(BaseDBClient):
                         "text TEXT",
                         "department VARCHAR(255)",
                         "power_type VARCHAR(50)",
-                        "power_name VARCHAR(255)",
+                        "power_name VARCHAR(1024)",
                         "doc_type VARCHAR(50)",
+                        "metadata JSONB",
                         "created_at TIMESTAMP DEFAULT NOW()"
                     ]
                 else:
@@ -211,8 +214,11 @@ class PostgresDBClient(BaseDBClient):
                 create_sql = f'CREATE TABLE {collection_name} ({", ".join(field_defs)})'
                 self._cursor.execute(create_sql)
 
-                # 创建向量索引
-                index_sql = f"CREATE INDEX IF NOT EXISTS idx_{collection_name}_vector ON {collection_name} USING ivfflat (vector {self.metric_type})"
+                # 创建向量索引 - 将 metric_type 转换为 pgvector 操作符类
+                # cosine -> vector_cosine_ops, l2 -> vector_l2_ops, ip -> vector_ip_ops
+                ops_map = {"cosine": "vector_cosine_ops", "l2": "vector_l2_ops", "ip": "vector_ip_ops"}
+                ops_class = ops_map.get(self.metric_type.lower(), "vector_cosine_ops")
+                index_sql = f"CREATE INDEX IF NOT EXISTS idx_{collection_name}_vector ON {collection_name} USING hnsw (vector {ops_class})"
                 self._cursor.execute(index_sql)
 
                 self._conn.commit()
@@ -227,13 +233,13 @@ class PostgresDBClient(BaseDBClient):
 
     def _convert_vector_to_array(self, vector) -> str:
         """
-        将向量转换为 PostgreSQL 数组格式
+        将向量转换为 PostgreSQL vector 格式
 
         Args:
             vector: 向量（list 或 numpy array）
 
         Returns:
-            PostgreSQL 数组格式字符串
+            PostgreSQL vector 格式字符串
         """
         if isinstance(vector, np.ndarray):
             vector = vector.tolist()
@@ -326,7 +332,7 @@ class PostgresDBClient(BaseDBClient):
 
             # 确保表存在
             columns = self._build_columns_from_data(data)
-            self._ensure_table_exists(collection_name, columns)
+            self._ensure_table_exists(collection_name)
 
             # 准备插入数据
             insert_count = 0
@@ -398,34 +404,43 @@ class PostgresDBClient(BaseDBClient):
 
             for vector in vectors:
                 # 构建查询 SQL
-                vector_str = self._convert_vector_to_array(vector)
+                vector = self._convert_vector_to_array(vector)
 
-                # 选择输出字段
+                # 排除 distance，由 SQL 计算返回
                 select_fields = output_fields or ["*"]
+                if "distance" in select_fields:
+                    select_fields = [f for f in select_fields if f != "distance"]
 
                 # 构建 WHERE 子句
                 where_clause = ""
                 if filter_expr:
                     where_clause = f"WHERE {self._parse_filter_expr(filter_expr)}"
 
-                # 使用余弦相似度搜索
+                # 使用余弦相似度搜索                
                 select_sql = f"""
-                    SELECT {','.join(select_fields)}, (vector <=> '{vector_str}') as distance
+                    SELECT {','.join(select_fields)}, (vector <=> %s) as distance
                     FROM {collection_name}
                     {where_clause}
-                    ORDER BY vector <=> '{vector_str}'
-                    LIMIT {top_k}
+                    ORDER BY vector <=> %s
+                    LIMIT %s
                 """
-
-                self._cursor.execute(select_sql)
+                
+                # 这里把 vector 传两次，一次算距离，一次排序
+                self._cursor.execute(select_sql, (vector, vector, top_k))
+                
                 rows = self._cursor.fetchall()
 
+                logger.info(f"查询返回 {len(rows)} 条结果")
+                
+                field_names = [desc[0] for desc in self._cursor.description]
+                    
                 # 转换为字典列表
                 result_list = []
                 for row in rows:
                     row_dict = {}
-                    for idx, field in enumerate(select_fields):
-                        row_dict[field] = row[idx]
+                    if field_names:
+                        for idx, field in enumerate(field_names):
+                            row_dict[field] = row[idx]
                     result_list.append(row_dict)
 
                 results.append(result_list)
