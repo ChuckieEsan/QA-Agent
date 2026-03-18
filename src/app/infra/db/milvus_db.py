@@ -43,11 +43,12 @@ class MilvusDBClient(BaseDBClient):
             return
 
         # 使用传入的配置或默认配置
+        milvus_config = settings.milvus_db  # 使用独立的 milvus_db 配置
         self.config = config or {
-            "db_path": str(settings.vectordb.db_path),
-            "vector_dimension": settings.vectordb.vector_dimension,
-            "metric_type": settings.vectordb.metric_type,
-            "enable_dynamic_field": settings.vectordb.enable_dynamic_field,
+            "db_path": str(milvus_config.db_path),
+            "vector_dimension": milvus_config.vector_dimension,
+            "metric_type": milvus_config.metric_type,
+            "enable_dynamic_field": milvus_config.enable_dynamic_field,
         }
 
         super().__init__(self.config)
@@ -71,7 +72,7 @@ class MilvusDBClient(BaseDBClient):
         初始化 Milvus 客户端
         """
         try:
-            logger.info(f"🔌 连接 Milvus Lite: {self.db_path}")
+            logger.info(f"连接 Milvus Lite: {self.db_path}")
 
             # 创建 Milvus 客户端
             self._client = MilvusClient(uri=self.db_path)
@@ -118,7 +119,7 @@ class MilvusDBClient(BaseDBClient):
         try:
             # 检查集合是否存在
             if not self._client.has_collection(collection_name):
-                logger.info(f"🔨 集合 {collection_name} 不存在，正在创建...")
+                logger.info(f"集合 {collection_name} 不存在，正在创建...")
 
                 # 创建集合
                 self._client.create_collection(
@@ -441,9 +442,10 @@ if __name__ == "__main__":
     logger.info("示例2: 使用上下文管理器")
     logger.info("=" * 60)
 
+    milvus_config = settings.milvus_db
     config = {
-        "db_path": str(settings.vectordb.db_path),
-        "vector_dimension": settings.vectordb.vector_dimension,
+        "db_path": str(milvus_config.db_path),
+        "vector_dimension": milvus_config.vector_dimension,
     }
 
     with MilvusDBClient(config) as client_ctx:

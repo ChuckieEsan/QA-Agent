@@ -69,30 +69,37 @@ class ModelConfig(BaseConfig):
         description="重排模型本地路径",
     )
 
+class DBConfig(BaseConfig):
+    vector_dimension: int = Field(
+        default=1024, description="向量维度（BGE-M3 为 1024）"
+    )
+    metric_type: str = Field(default="COSINE", description="相似度度量类型")
+    gov_cases_collection_name: str = Field(default="gov_cases", description="问政案例集合名称")
+    gov_powers_collection_name: str = Field(default="gov_powers", description="行政权力清单集合名称")
+    # 检索参数
+    default_top_k: int = Field(default=5, description="默认返回结果数量")
+    max_top_k: int = Field(default=20, description="最大返回结果数量")
+    
 
-class MilvusDBConfig(BaseConfig):
-    """向量数据库配置"""
-
+class MilvusDBConfig(DBConfig):
+    """Milvus 向量数据库配置"""
     db_path: str = Field(
         default=str(PROJECT_ROOT / "data" / "milvus_db" / "gov_pulse.db"),
         description="Milvus 数据库路径",
     )
 
-    gov_cases_collection_name: str = Field(default="gov_cases", description="问政案例集合名称")
-    gov_powers_collection_name: str = Field(default="gov_powers", description="行政权力清单集合名称")
-    vector_dimension: int = Field(
-        default=1024, description="向量维度（BGE-M3 为 1024）"
-    )
-    metric_type: str = Field(default="COSINE", description="相似度度量类型")
     enable_dynamic_field: bool = Field(default=True, description="是否启用动态字段")
 
-    # 检索参数
-    default_top_k: int = Field(default=5, description="默认返回结果数量")
-    max_top_k: int = Field(default=20, description="最大返回结果数量")
 
-    # 性能优化
-    search_cache_size: int = Field(default=100, description="搜索缓存大小")
-    search_cache_ttl: int = Field(default=300, description="搜索缓存过期时间（秒）")
+class PostgresDBConfig(DBConfig):
+    """PostgreSQL 向量数据库配置（使用 pgvector）"""
+
+    # PostgreSQL 连接配置
+    host: str = Field(default="localhost", description="PostgreSQL 主机")
+    port: int = Field(default=5432, description="PostgreSQL 端口")
+    user: str = Field(default="root", description="PostgreSQL 用户")
+    password: str = Field(default="root", description="PostgreSQL 密码")
+    database: str = Field(default="db", description="PostgreSQL 数据库名")
 
 
 class LLMProviderConfig(BaseConfig):
@@ -244,11 +251,20 @@ class Settings(BaseConfig):
     version: str = Field(default="1.0.0", description="版本号")
     debug: bool = Field(default=False, description="调试模式")
 
+    # 数据库类型选择
+    db_type: str = Field(default="postgres", description="数据库类型: milvus/postgres")
+
     # 子配置
     paths: PathConfig = Field(default_factory=PathConfig, description="路径配置")
     models: ModelConfig = Field(default_factory=ModelConfig, description="模型配置")
-    vectordb: MilvusDBConfig = Field(
-        default_factory=MilvusDBConfig, description="向量数据库配置"
+    milvus_db: MilvusDBConfig = Field(
+        default_factory=MilvusDBConfig, description="Milvus 向量数据库配置"
+    )
+    postgres_db: PostgresDBConfig = Field(
+        default_factory=PostgresDBConfig, description="PostgreSQL 向量数据库配置"
+    )
+    vectordb: DBConfig = Field(
+        default_factory=PostgresDBConfig, description="向量数据库配置"
     )
     retriever: RetrieverConfig = Field(
         default_factory=RetrieverConfig, description="检索器配置"
