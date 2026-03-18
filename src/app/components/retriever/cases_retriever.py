@@ -12,7 +12,7 @@ from langchain_core.documents import Document
 from pydantic import Field, ConfigDict
 
 from src.config.setting import settings
-from src.app.infra.db.milvus_db import MilvusDBClient
+from src.app.infra.db.postgres_db import PostgresDBClient
 from src.app.infra.embedding.base_embedding import BaseEmbedding
 from src.app.components.reranker.bge_reranker import BGERerankerCompressor
 from src.app.infra.utils.logger import get_logger
@@ -31,7 +31,7 @@ class CasesVectorRetriever(BaseRetriever):
 
     # 依赖注入字段
     embed_model: BaseEmbedding = Field(description="Embedding 模型实例")
-    milvus_client: MilvusDBClient = Field(description="Milvus 数据库客户端实例")
+    postgres_client: PostgresDBClient = Field(description="Postgres 数据库客户端实例")
     compressor: BGERerankerCompressor = Field(description="BGE 重排压缩器")
 
     # 配置字段
@@ -54,7 +54,7 @@ class CasesVectorRetriever(BaseRetriever):
         query_vec = self.embed_model.model.encode([query], normalize_embeddings=True)
 
         search_limit = self.top_k * 3
-        raw_results = self.milvus_client.search(
+        raw_results = self.postgres_client.search(
             collection_name=settings.vectordb.gov_cases_collection_name,
             vectors=query_vec.tolist(),
             top_k=search_limit,
@@ -84,20 +84,20 @@ class CasesVectorRetriever(BaseRetriever):
         """将原始结果转换为 Document"""
         documents = []
         for hit in raw_hits:
-            entity = hit.get("entity", hit)
-            metadata = entity.get("metadata", {})
+            # Postgres 返回的字段直接在 hit 中，无需从 entity 获取
+            metadata = hit.get("metadata", {})
 
             documents.append(
                 Document(
-                    page_content=entity.get("text", ""),
+                    page_content=hit.get("text", ""),
                     metadata={
-                        "source": "milvus",
+                        "source": "postgres",
                         "collection": settings.vectordb.gov_cases_collection_name,
-                        "title": entity.get("title", ""),
-                        "department": entity.get("department", ""),
-                        "time": metadata.get("time", ""),
-                        "question": entity.get("question", ""),
-                        "answer": entity.get("answer", ""),
+                        "title": hit.get("title", ""),
+                        "department": hit.get("department", ""),
+                        "time": metadata.get("time", "") if isinstance(metadata, dict) else "",
+                        "question": hit.get("question", ""),
+                        "answer": hit.get("answer", ""),
                         "distance": hit.get("distance", 0),
                         "similarity": 1 - hit.get("distance", 0),
                     }
@@ -119,7 +119,7 @@ class CasesVectorRetriever(BaseRetriever):
 
 def create_cases_retriever(
     embed_model: Optional[BaseEmbedding] = None,
-    milvus_client: Optional[MilvusDBClient] = None,
+    postgres_client: Optional[PostgresDBClient] = None,
     compressor: Optional[BGERerankerCompressor] = None,
     top_k: int = 5,
     min_similarity: float = 0.5,
@@ -129,7 +129,7 @@ def create_cases_retriever(
 
     Args:
         embed_model: Embedding 模型实例（如果不提供则使用单例）
-        milvus_client: Milvus 客户端实例（如果不提供则使用单例）
+        postgres_client: Postgres 客户端实例（如果不提供则使用单例）
         compressor: BGE 压缩器实例（如果不提供则使用默认配置创建）
         top_k: 返回结果数量
         min_similarity: 最小相似度阈值
@@ -139,8 +139,8 @@ def create_cases_retriever(
     """
     if embed_model is None:
         embed_model = BaseEmbedding()
-    if milvus_client is None:
-        milvus_client = MilvusDBClient()
+    if postgres_client is None:
+        postgres_client = PostgresDBClient()
     if compressor is None:
         compressor = create_bge_compressor(
             top_k=top_k or settings.vectordb.default_top_k,
@@ -149,7 +149,7 @@ def create_cases_retriever(
 
     return CasesVectorRetriever(
         embed_model=embed_model,
-        milvus_client=milvus_client,
+        postgres_client=postgres_client,
         compressor=compressor,
         top_k=top_k or settings.vectordb.default_top_k,
         min_similarity=min_similarity or settings.retriever.min_similarity,
