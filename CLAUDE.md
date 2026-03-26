@@ -71,7 +71,7 @@ logger.info(f"处理请求: {request_id}")
 print(f"处理请求: {request_id}")
 ```
 
-### 防御性编程
+### 4 防御性编程
 
 - **必含 try-except**: 调用 LLM API、数据库 (PostgreSQL/Milvus) 时必须包含 `try-except` 块
 - **失败重试**: 在消费者端正确处理 Nack 或失败重试逻辑
@@ -90,7 +90,7 @@ async def query_cases(query: str) -> List[Document]:
         return []  # 降级返回空列表
 ```
 
-### 5. Emoji 使用规范
+### 5 Emoji 使用规范
 
 - **业务代码**: 禁止在业务代码中使用 Emoji 字符
 - **前端 UI**: 在开发 Streamlit 前端时，可以适当使用 Emoji
@@ -103,18 +103,18 @@ logger.info(f"✅ 请求处理成功")
 logger.info(f"请求处理成功")
 ```
 
-### 6. LangChain/LangGraph 最佳实践
+### 6 LangChain/LangGraph 最佳实践
 
 - **复用组件**: 尽可能少的重复造轮子，复用 LangChain 已有的组件
 - **标准接口**: 继承 LangChain 标准接口（如 `BaseRetriever`, `RunnableSerializable`）
 - **LCEL 链式**: 使用 LCEL 构建链式表达式
 
-### 7. 重构原则
+### 7 重构原则
 
 - **不向后兼容**: 如果发生重构，**不需要进行向后兼容**
 - **直接重构**: 直接修改代码，不需要保留旧接口
 
-### 8. 测试数据规范
+### 8 测试数据规范
 
 - **只读生产库**: 禁止在测试用例中**写入**生产数据库，只允许读取
 - **测试数据**: 使用独立的测试数据库或 mock 数据
@@ -133,6 +133,7 @@ logger.info(f"请求处理成功")
   - 常量: `UPPER_SNAKE_CASE`
   - 私有成员: 前缀 `_` (如 `_internal_method`)
 - **导入顺序**: 标准库 → 第三方库 → 项目内部模块，组间空行分隔
+- **禁止在代码块内进行 import**
 
 ```python
 # 正确的导入顺序

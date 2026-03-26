@@ -25,13 +25,13 @@ class CustomFormatter(logging.Formatter):
         'RESET': '\033[0m'      # 重置颜色
     }
     
-    # 图标
+    # 图标 (不使用 Emoji)
     ICONS = {
-        'DEBUG': '🔍',
-        'INFO': 'ℹ️',
-        'WARNING': '⚠️',
-        'ERROR': '❌',
-        'CRITICAL': '💥'
+        'DEBUG': '[D]',
+        'INFO': '[I]',
+        'WARNING': '[W]',
+        'ERROR': '[E]',
+        'CRITICAL': '[C]'
     }
     
     def __init__(self, use_color: bool = True):
@@ -333,4 +333,4 @@ if __name__ == "__main__":
     time.sleep(0.1)
     perf_logger.end_timer("向量检索", {"结果数量": 10})
     
-    print("\n✅ 日志系统测试完成")
+    logger.info("日志系统测试完成")

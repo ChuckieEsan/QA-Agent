@@ -11,7 +11,7 @@ from src.config.setting import settings
 # ================= 配置 =================
 st.set_page_config(layout="wide", page_title="Milvus 数据库查看器")
 DB_PATH = str(settings.vectordb.db_path)
-COLLECTION_NAME = settings.vectordb.collection_name
+COLLECTION_NAME = settings.vectordb.gov_cases_collection_name
 
 # ================= 侧边栏：连接数据库 =================
 st.sidebar.title("🗄️ 数据库连接")

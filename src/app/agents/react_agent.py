@@ -2,6 +2,7 @@
 政务智能体编排层 (ReAct Agent)
 """
 
+from pathlib import Path
 from typing import List, TypedDict, Annotated, Literal
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.types import Command
@@ -14,28 +15,14 @@ from src.app.infra.llm import create_llm_service
 
 logger = get_logger(__name__)
 
-system_prompt = """你是一个专业、严谨且富有同理心的【政务问政智能助手】。
-你的目标是准确解答市民的咨询、并妥善处理投诉与建议。
+# 从外置文件读取系统提示词
+def _load_system_prompt() -> str:
+    """从 prompts 目录加载系统提示词"""
+    prompt_path = Path(__file__).parent.parent / "prompts" / "agent_system_prompt.md"
+    return prompt_path.read_text(encoding="utf-8")
 
-为了保证政府答复的权威性与准确性，你必须严格遵循以下【标准作业流 (SOP)】：
 
-第一步：意图侦测 (首次交互必做)
-- 面对用户的新诉求，必须优先调用 `classify_gov_request_tool` 分析意图。
-- 严格按照分类工具返回的【系统建议】决定接下来的行动方向。
-
-第二步：权威查证 (绝不捏造)
-- 如果涉及业务办理、政策解读，请调用 `retrieve_cases_tool` 检索政策与历史案例。
-- 如果涉及噪音、纠纷、违建等需要明确管辖部门的投诉/建议，请务必先调用 `retrieve_powers_tool` 确认到底归哪个部门管，绝不允许凭空猜测部门名称。
-
-第三步：草拟与自我审核 (发出回复前必做)
-- 当你收集完足够的信息准备回复用户时，在心里默默打个草稿。
-- 强制要求：你必须调用 `validate_answer_tool`，传入你的草稿和核心上下文进行自我审核。
-- 如果审核不通过，仔细阅读打回原因，修改草稿并重新审核，直到通过为止！
-
-第四步：最终答复或兜底派单
-- 如果经过多次检索仍无法解答，或者审核持续不通过，说明该问题超出 AI 能力范畴。如果有派发工单的工具（如 `create_work_order`），请果断调用它转交人工；如果没有，请向用户致歉并建议拨打 12345 依然转人工。
-
-牢记：作为政务助手，准确性高于一切。不知为不知，绝不能胡编乱造政策或部门名称！"""
+system_prompt = _load_system_prompt()
 
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]

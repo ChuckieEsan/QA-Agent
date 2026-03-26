@@ -60,7 +60,7 @@ class GovAnswerValidator(BaseModel):
     def model_post_init(self, __context) -> None:
         """初始化后构建 LCEL 链"""
         self._build_chain()
-        logger.info("✅ GovAnswerValidator 初始化完成")
+        logger.info("GovAnswerValidator 初始化完成")
 
     def _build_chain(self) -> None:
         """使用 langchain LCEL 构建验证 Chain"""
