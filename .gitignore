@@ -34,3 +34,5 @@ logs
 docs/qwen_agent
 
 .claude
+
+sessions.json
