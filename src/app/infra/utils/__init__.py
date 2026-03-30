@@ -4,8 +4,8 @@
 """
 
 from .logger import get_logger, setup_logging, PerformanceLogger
-from .system_utils import get_device
-from .data_utils import generate_doc_id, clean_text
+from .system import get_device
+from .data import generate_doc_id, clean_text
 
 __all__ = [
     # Logger

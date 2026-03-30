@@ -5,6 +5,7 @@
 from pathlib import Path
 from typing import List, TypedDict, Annotated, Literal
 from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.prompts import PromptTemplate
 from langgraph.types import Command
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, START, END
@@ -15,14 +16,11 @@ from src.app.infra.llm import create_llm_service
 
 logger = get_logger(__name__)
 
-# 从外置文件读取系统提示词
-def _load_system_prompt() -> str:
-    """从 prompts 目录加载系统提示词"""
-    prompt_path = Path(__file__).parent.parent / "prompts" / "agent_system_prompt.md"
-    return prompt_path.read_text(encoding="utf-8")
-
-
-system_prompt = _load_system_prompt()
+# 从外置文件加载系统提示词
+_prompt_template = PromptTemplate.from_file(
+    template_file=str(Path(__file__).parent.parent / "prompts" / "agent_system_prompt.md"),
+)
+system_prompt = _prompt_template.format()
 
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]

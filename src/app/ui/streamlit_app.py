@@ -3,6 +3,13 @@ GovPulse 前端入口文件
 提供多页面导航功能
 """
 
+import sys
+from pathlib import Path
+
+# 将项目根目录添加到 sys.path，确保所有页面都能正确导入 src 模块
+project_root = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 import streamlit as st
 
 # 页面配置

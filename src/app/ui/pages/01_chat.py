@@ -2,24 +2,19 @@
 智能问答页面
 """
 
+import json
+import asyncio
 import streamlit as st
 from datetime import datetime
 from typing import Dict, Any, List
 
-# 尝试导入 session_manager
-try:
-    import sys
-    sys.path.insert(0, str(__file__).rsplit("/", 1)[0])
-    from session_manager import session_manager
-    USE_SESSION_MANAGER = True
-except Exception:
-    USE_SESSION_MANAGER = False
-    session_manager = None
+from app.agents import ainvoke
+from app.ui.session_manager import session_manager
+
+USE_SESSION_MANAGER = True
 
 
 # ==================== 常量配置 ====================
-
-API_BASE_URL = "http://localhost:8000/api"
 
 # 问政类型映射
 REQUEST_TYPE_MAP = {
@@ -36,17 +31,34 @@ REQUEST_TYPE_MAP = {
 def init_session_state():
     """初始化 session state"""
     if "current_session_id" not in st.session_state:
+        # 检查是否有现成的空会话，避免重复创建
         if USE_SESSION_MANAGER:
-            session_id = session_manager.create_session()
-            st.session_state.current_session_id = session_id
+            sessions = session_manager.get_all_sessions()
+            # 找到最新的空会话
+            empty_session = None
+            for s in sessions:
+                if not s.get("messages"):
+                    empty_session = s
+                    break
+            if empty_session:
+                st.session_state.current_session_id = empty_session.get("session_id") or empty_session.get("id")
+            else:
+                # 没有空会话则创建新的
+                session_id = session_manager.create_session()
+                st.session_state.current_session_id = session_id
         else:
             st.session_state.current_session_id = datetime.now().strftime("%Y%m%d%H%M%S")
 
     if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    if "api_base_url" not in st.session_state:
-        st.session_state.api_base_url = API_BASE_URL
+        # 从会话管理器加载消息
+        if USE_SESSION_MANAGER:
+            session = session_manager.get_session(st.session_state.current_session_id)
+            if session:
+                st.session_state.messages = session.get("messages", [])
+            else:
+                st.session_state.messages = []
+        else:
+            st.session_state.messages = []
 
 
 def get_sessions() -> List[Dict[str, Any]]:
@@ -76,9 +88,6 @@ def delete_session(session_id: str):
 
 def send_message(query: str) -> Dict[str, Any]:
     """发送消息到后端"""
-    import asyncio
-    from src.app.agents import ainvoke
-
     try:
         # 使用 ainvoke 直接调用
         response = asyncio.run(
@@ -104,7 +113,6 @@ def send_message(query: str) -> Dict[str, Any]:
 
 def export_chat():
     """导出对话"""
-    import json
     messages = st.session_state.messages
     if not messages:
         st.warning("没有可导出的对话")
@@ -142,16 +150,22 @@ def render_sidebar():
 
         sessions = get_sessions()
         if sessions:
-            for s in sessions:
-                session_id = s.get("session_id", "")
+            for i, s in enumerate(sessions):
+                session_id = s.get("session_id") or s.get("id", "")
+                # 跳过无效会话
+                if not session_id:
+                    continue
                 title = s.get("title", "未命名会话")[:20]
                 is_active = session_id == st.session_state.current_session_id
 
+                # 选中状态用不同样式
+                button_type = "primary" if is_active else "secondary"
                 col1, col2 = st.columns([4, 1])
                 with col1:
                     if st.button(
                         f"📝 {title}",
                         key=f"session_{session_id}",
+                        type=button_type,
                         use_container_width=True,
                     ):
                         st.session_state.current_session_id = session_id
@@ -203,9 +217,9 @@ def render_message(msg: Dict[str, Any]):
 
     if role == "user":
         st.markdown(f"""
-        <div style='display: flex; justify-content: flex-end; margin: 8px 0;'>
-            <div style='background-color: #3498db; color: white; padding: 12px 16px;
-                        border-radius: 12px; max-width: 80%;'>
+        <div style='display: flex; justify-content: flex-end; margin: 4px 0;'>
+            <div style='background-color: #3498db; color: white; padding: 8px 12px;
+                        border-radius: 10px; max-width: 80%; font-size: 14px;'>
                 <b>您</b><br>{content}
             </div>
         </div>
@@ -216,8 +230,8 @@ def render_message(msg: Dict[str, Any]):
             col1, col2 = st.columns([6, 1])
             with col1:
                 st.markdown(f"""
-                <div style='background-color: #f8f9fa; color: #2c3e50; padding: 12px 16px;
-                            border-radius: 12px; margin: 8px 0; max-width: 80%;'>
+                <div style='background-color: #f8f9fa; color: #2c3e50; padding: 8px 12px;
+                            border-radius: 10px; margin: 4px 0; max-width: 80%; font-size: 14px;'>
                     <b>🏛️ 智能助手</b><br>
                     {content}
                 </div>
@@ -238,8 +252,6 @@ def render_chat_area():
 
 def render_input_area():
     """渲染输入区域"""
-    st.divider()
-
     # 预置问题
     preset_questions = [
         "灵活就业人员如何缴纳社保？",
@@ -247,20 +259,55 @@ def render_input_area():
         "社保转移怎么办理？",
     ]
 
-    with st.expander("💡 常见问题"):
-        cols = st.columns(3)
-        for i, q in enumerate(preset_questions):
-            if cols[i % 3].button(q, key=f"preset_{i}"):
-                st.session_state.input_text = q
+    # 处理预置问题按钮点击 - 直接发送消息
+    for i, q in enumerate(preset_questions):
+        if st.button(q, key=f"preset_{i}", use_container_width=True):
+            # 添加用户消息
+            st.session_state.messages.append({
+                "role": "user",
+                "content": q,
+                "timestamp": datetime.now().isoformat(),
+            })
 
-    # 输入框
+            # 调用后端
+            with st.spinner("🤔 智能助手思考中..."):
+                response = send_message(q)
+
+            # 添加 AI 消息
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": response["answer"],
+                "timestamp": datetime.now().isoformat(),
+                "metadata": {
+                    "classification": response.get("classification", {}),
+                    "confidence_score": response.get("confidence_score", 0.0),
+                    "work_order_id": response.get("work_order_id"),
+                },
+            })
+
+            # 保存到会话管理器
+            if USE_SESSION_MANAGER:
+                session_manager.add_message(
+                    st.session_state.current_session_id,
+                    "user", q,
+                )
+                session_manager.add_message(
+                    st.session_state.current_session_id,
+                    "assistant", response["answer"],
+                )
+
+            st.rerun()
+
+    st.divider()
+
+    # 输入框 - 更紧凑
     if "input_text" not in st.session_state:
         st.session_state.input_text = ""
 
     query = st.text_area(
         "请输入您的问题：",
         value=st.session_state.input_text,
-        height=100,
+        height=60,
         key="query_input",
         label_visibility="collapsed",
     )
@@ -306,11 +353,11 @@ def render_input_area():
         if USE_SESSION_MANAGER:
             session_manager.add_message(
                 st.session_state.current_session_id,
-                {"role": "user", "content": query.strip()},
+                "user", query.strip(),
             )
             session_manager.add_message(
                 st.session_state.current_session_id,
-                {"role": "assistant", "content": response["answer"]},
+                "assistant", response["answer"],
             )
 
         st.rerun()
