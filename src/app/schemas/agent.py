@@ -1,6 +1,4 @@
-"""
-Agent 数据模型定义
-"""
+"""Agent 相关数据模型"""
 
 from typing import Any, Dict, List, Optional
 

@@ -213,7 +213,7 @@ class PerformanceLogger:
     def start_timer(self, operation: str):
         """开始计时"""
         self._start_times[operation] = datetime.now()
-        self.logger.debug(f"⏱️  开始: {operation}")
+        self.logger.debug(f"[T] 开始: {operation}")
     
     def end_timer(self, operation: str, extra_info: Dict[str, Any] = None):
         """结束计时并记录耗时"""
@@ -232,11 +232,11 @@ class PerformanceLogger:
         if extra_info:
             log_data.update(extra_info)
         
-        self.logger.info(f"⏱️  完成: {operation} - 耗时: {elapsed.total_seconds():.3f}s")
+        self.logger.info(f"[T] 完成: {operation} - 耗时: {elapsed.total_seconds():.3f}s")
         
         # 如果耗时过长，记录警告
         if elapsed.total_seconds() > 5.0:
-            self.logger.warning(f"⚠️  操作 {operation} 耗时过长: {elapsed.total_seconds():.3f}s")
+            self.logger.warning(f"[!] 操作 {operation} 耗时过长: {elapsed.total_seconds():.3f}s")
         
         del self._start_times[operation]
         
@@ -244,7 +244,7 @@ class PerformanceLogger:
     
     def log_metric(self, name: str, value: float, unit: str = ""):
         """记录指标"""
-        self.logger.info(f"📊 指标: {name} = {value} {unit}".strip())
+        self.logger.info(f"[M] 指标: {name} = {value} {unit}".strip())
 
 
 def get_logger(name: str = "govpulse") -> logging.Logger:
@@ -265,10 +265,10 @@ def setup_logging():
     """初始化日志系统（可在应用启动时调用）"""
     logger = get_logger(__name__)
     logger.info("=" * 60)
-    logger.info(f"🚀 启动 GovPulse 系统 v{settings.version}")
-    logger.info(f"📁 项目根目录: {settings.paths.project_root}")
-    logger.info(f"📝 日志级别: {settings.logging.level}")
-    logger.info(f"💾 日志文件: {settings.logging.file_path}")
+    logger.info(f"[*] 启动 GovPulse 系统 v{settings.version}")
+    logger.info(f"[*] 项目根目录: {settings.paths.project_root}")
+    logger.info(f"[*] 日志级别: {settings.logging.level}")
+    logger.info(f"[*] 日志文件: {settings.logging.file_path}")
     logger.info("=" * 60)
 
 

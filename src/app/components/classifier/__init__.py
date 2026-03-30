@@ -4,10 +4,9 @@
 
 from src.app.components.classifier.request_classifier import (
     GovRequestClassifier,
-    GovRequestClassifiedResult,
     create_gov_request_classifier,
-    GovRequestType,
 )
+from src.app.schemas import GovRequestClassifiedResult, GovRequestType
 
 __all__ = [
     "GovRequestClassifier",

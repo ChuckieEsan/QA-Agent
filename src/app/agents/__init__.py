@@ -10,7 +10,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from .react_agent import (
     gov_agent_app,
 )
-from .schemas import AgentResponse
+from src.app.schemas import AgentResponse
 
 # 创建 checkpointer 用于维护会话状态
 _memory = MemorySaver()

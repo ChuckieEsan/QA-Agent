@@ -25,7 +25,7 @@ system_prompt = _prompt_template.format()
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
     
-def create_gov_agent():
+def create_gov_agent() -> StateGraph:
     logger.info("正在初始化自定义 GovPulse ReAct Graph...")
     llm = create_llm_service(provider_id="deepseek", model_name="deepseek-chat")
     tools = get_all_tools()
@@ -38,14 +38,14 @@ def create_gov_agent():
     # 节点 A: 调用大模型
     async def call_model(state: AgentState):
         # 自动注入 system_prompt (你需要确保 system_prompt 文本可用)
-        messages =[{"role": "system", "content": system_prompt}] + state["messages"]
+        messages = [{"role": "system", "content": system_prompt}] + state["messages"]
         response = await model_with_tools.ainvoke(messages)
         return {"messages": [response]}
 
     # 节点 B: 自定义工具执行引擎 (核心熔断逻辑在这里)
     async def execute_tools(state: AgentState):
         last_message = state["messages"][-1]
-        results =[]
+        results = []
         
         for tool_call in last_message.tool_calls:
             tool_name = tool_call["name"]
@@ -54,7 +54,7 @@ def create_gov_agent():
             # 执行工具
             result = await tool.ainvoke(tool_call)
             
-            # 🌟 重点拦截：如果工具返回的是图控制指令(Command)，直接抛出给 LangGraph！
+            # 重点拦截：如果工具返回的是图控制指令(Command)，直接抛出给 LangGraph！
             if isinstance(result, Command):
                 logger.info(f"触发动态路由熔断！前往: {result.goto}")
                 return result 
