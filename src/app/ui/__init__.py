@@ -3,10 +3,8 @@
 """
 
 from .session_manager import session_manager, SessionManager
-from .streamlit_app import main
 
 __all__ = [
     "session_manager",
     "SessionManager",
-    "main",
 ]

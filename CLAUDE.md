@@ -515,3 +515,7 @@ uv run python scripts/data/ingest.py
 uv run python scripts/demo/retrieve_demo.py
 ```
 
+### Streamlit 前端
+```bash
+uv run streamlit run src/app/ui/streamlit_app.py
+```
